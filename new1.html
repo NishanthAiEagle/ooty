@@ -536,62 +536,73 @@
   </a-scene>
 
   <script>
+    // NOTE: lat/lng are APPROXIMATE. Right-click each spot in Google Maps and paste the exact values.
     const PLACES = {
       ooty_lake: {
+        lat: 11.403, lng: 76.6875,
         title: "Ooty Lake & Boathouse",
         time: "13 min (2.4 km)",
         video: "ooty/Ooty_Lake.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse"
       },
       pykara: {
+        lat: 11.465, lng: 76.595,
         title: "Pykara Waterfalls & Lake",
         time: "55 min (21 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls"
       },
       rose_garden: {
+        lat: 11.4114, lng: 76.7053,
         title: "Government Rose Garden",
         time: "4 min (0.6 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty"
       },
       botanical_garden: {
+        lat: 11.4187, lng: 76.7112,
         title: "Government Botanical Garden",
         time: "5 min (0.8 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty"
       },
       murugan_temple: {
+        lat: 11.4096, lng: 76.6868,
         title: "Elk Hill Murugan Temple",
         time: "8 min (1.4 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty"
       },
       govt_museum: {
+        lat: 11.4171, lng: 76.7101,
         title: "Government Museum Ooty",
         time: "4 min (0.7 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty"
       },
       doddabetta: {
+        lat: 11.4, lng: 76.7357,
         title: "Doddabetta Peak Observatory",
         time: "35 min (9.5 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak"
       },
       pine_forest: {
+        lat: 11.4361, lng: 76.6752,
         title: "Pine Forest (Shooting Spot)",
         time: "35 min (10 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty"
       },
       avalanche: {
+        lat: 11.2761, lng: 76.5583,
         title: "Avalanche Lake Checkpoint",
         time: "1 hr 15 min (25 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty"
       },
       mudumalai: {
+        lat: 11.5675, lng: 76.533,
         title: "Mudumalai Tiger Reserve",
         time: "1 hr 20 min (37 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
@@ -705,6 +716,85 @@
       });
     }
 
+    // ---- Live distance from the user's current location ----
+    let liveRequestId = 0;
+    let userPos = null;
+    let userPosTime = 0;
+    const POS_MAX_AGE = 60000; // reuse a location fix for 60 s
+
+    function getUserPosition() {
+      if (userPos && Date.now() - userPosTime < POS_MAX_AGE) return Promise.resolve(userPos);
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            userPosTime = Date.now();
+            resolve(userPos);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      });
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    async function fetchRoute(from, to) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+                    from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat + '?overview=false';
+        const res = await fetch(url, { signal: ctrl.signal });
+        const j = await res.json();
+        if (!j.routes || !j.routes.length) throw new Error('no route');
+        return { km: j.routes[0].distance / 1000, min: Math.round(j.routes[0].duration / 60) };
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function formatKm(km) { return km < 10 ? km.toFixed(1) : String(Math.round(km)); }
+
+    function formatDuration(min) {
+      if (min < 60) return min + ' min';
+      const h = Math.floor(min / 60), m = min % 60;
+      return h + ' hr' + (m ? ' ' + m + ' min' : '');
+    }
+
+    function setDistanceLabel(text) {
+      arDistanceTab.setAttribute('value', text);
+      infoTime.innerText = text;
+    }
+
+    // Shows the fixed value first (set in the click handler), then swaps in the live one
+    async function updateLiveDistance(id) {
+      const data = PLACES[id];
+      if (!data || data.lat == null) return;
+      const reqId = ++liveRequestId;
+
+      const from = await getUserPosition();
+      if (!from || reqId !== liveRequestId) return; // denied, failed, or user moved on
+
+      const to = { lat: data.lat, lng: data.lng };
+      let label;
+      try {
+        const r = await fetchRoute(from, to);
+        label = 'From you \u00B7 ' + formatDuration(r.min) + ' (' + formatKm(r.km) + ' km)';
+      } catch (e) {
+        label = 'From you \u00B7 ~' + formatKm(haversineKm(from, to)) + ' km straight line';
+      }
+      if (reqId !== liveRequestId) return;
+      setDistanceLabel(label);
+    }
+
     // Attach click listeners to landmark buttons
     document.querySelectorAll('.spot-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -741,6 +831,8 @@
         mapsLink.href = data.maps;
         bottomBar.classList.add('active');
         document.body.classList.add('spot-open');
+
+        updateLiveDistance(id);
       });
     });
 
@@ -776,6 +868,7 @@
 
     // Close button — animate the billboard shrinking away before hiding it
     function closeActiveSpot() {
+      liveRequestId++;
       videoEl.pause();
 
       screenGroup.removeAttribute('animation__hide');
