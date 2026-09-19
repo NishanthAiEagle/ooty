@@ -361,40 +361,30 @@
     <!-- Target Entity -->
     <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
 
-      <!-- ================= 1. THE FLOATING 3D BILLBOARD SCREEN ================= -->
-      <a-entity id="videoScreenGroup" position="0 0.58 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
+      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless) ================= -->
+      <a-entity id="videoScreenGroup" position="0 0.56 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
 
-        <!-- Outer Forest Backing -->
-        <a-plane position="0 0.03 -0.01" width="0.86" height="0.58" color="#0a2016" material="opacity: 1; roughness: 0.8; metalness: 0.2"></a-plane>
+        <!-- Soft backing plate only — no gold border, just enough contrast to read over live camera -->
+        <a-plane position="0 -0.011 -0.012" width="0.74" height="0.585" color="#0a2016" material="opacity: 0.82; roughness: 0.9; metalness: 0.05"></a-plane>
 
-        <!-- Outer Brass Trim -->
-        <a-plane position="0 0.03 -0.008" width="0.84" height="0.56" color="#c8a24a" material="opacity: 0.9"></a-plane>
-
-        <!-- Inner Bezel (Matte Black Screen Well) -->
-        <a-plane position="0 0.05 -0.005" width="0.74" height="0.425" color="#000000" material="opacity: 1"></a-plane>
-
-        <!-- Video Surface (Strictly bound inside the black bezel with flat shader) -->
-        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0.05 0.005" material="shader: flat;"></a-video>
+        <!-- Video Surface, flush edge-to-edge, no bezel -->
+        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
 
         <!-- Header Banner -->
-        <a-plane position="0 0.27 0.01" width="0.80" height="0.06" color="#133423" material="opacity: 0.98">
-          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#e7d8a4" width="1.1" baseline="center"></a-text>
+        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#133423" material="opacity: 0.95">
+          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#e7d8a4" width="1.0" baseline="center"></a-text>
         </a-plane>
 
         <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
-        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.16 -0.20 0.02" width="0.38" height="0.07" color="#c8a24a"
+        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#c8a24a"
                  animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
           <a-text id="playPauseText" value="&#9654; PLAY VIDEO" align="center" color="#171309" width="1.1"></a-text>
         </a-plane>
 
         <!-- Close Button -->
-        <a-plane id="arCloseBtn" class="clickable" position="0.22 -0.20 0.02" width="0.26" height="0.07" color="#7c4632">
+        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#7c4632">
           <a-text value="&#10005; CLOSE" align="center" color="#f4ecd8" width="1.05"></a-text>
         </a-plane>
-
-        <!-- Structural Billboard Anchors -->
-        <a-cylinder position="-0.34 -0.34 -0.02" radius="0.006" height="0.28" color="#c8a24a" opacity="0.85"></a-cylinder>
-        <a-cylinder position="0.34 -0.34 -0.02" radius="0.006" height="0.28" color="#c8a24a" opacity="0.85"></a-cylinder>
       </a-entity>
 
       <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD ================= -->
