@@ -17,16 +17,17 @@
       background-color: #000;
     }
 
-    /* CRITICAL FIX: Hide the raw HTML video element off-screen completely */
-    #arVideo {
+    /* PREVENTS RAW HTML VIDEO FROM RENDERING ON SCREEN */
+    video#arVideo {
+      display: none !important;
+      visibility: hidden !important;
       position: absolute !important;
-      top: -9999px !important;
-      left: -9999px !important;
+      top: -99999px !important;
+      left: -99999px !important;
       width: 1px !important;
       height: 1px !important;
       opacity: 0 !important;
       pointer-events: none !important;
-      z-index: -9999 !important;
     }
 
     /* Screen UI Overlay */
@@ -117,9 +118,6 @@
     </div>
   </div>
 
-  <!-- HTML5 Video element configured for iOS texture extraction (completely invisible in 2D DOM) -->
-  <video id="arVideo" crossOrigin="anonymous" playsinline webkit-playsinline preload="auto" loop muted></video>
-
   <!-- MindAR Scene -->
   <a-scene 
     mindar-image="imageTargetSrc: ./targets/card.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -128,8 +126,16 @@
     vr-mode-ui="enabled: false" 
     device-orientation-permission-ui="enabled: false">
 
+    <!-- ALL MEDIA TEXTURES DECLARED HERE -->
     <a-assets>
       <img id="pinIcon" src="https://cdn-icons-png.flaticon.com/512/684/684908.png" crossorigin="anonymous">
+      <video id="arVideo" 
+             crossOrigin="anonymous" 
+             playsinline 
+             webkit-playsinline 
+             preload="auto" 
+             loop 
+             muted></video>
     </a-assets>
 
     <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable">
@@ -150,8 +156,8 @@
         <!-- Inner Bezel (Matte Black Screen Well) -->
         <a-plane position="0 0.05 -0.005" width="0.74" height="0.425" color="#000000" material="opacity: 1"></a-plane>
 
-        <!-- Video Surface (Strictly bound inside the black bezel) -->
-        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0.05 0.005"></a-video>
+        <!-- Video Surface (Strictly bound inside the black bezel with flat shader) -->
+        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0.05 0.005" material="shader: flat;"></a-video>
         
         <!-- Header Banner -->
         <a-plane position="0 0.27 0.01" width="0.80" height="0.06" color="#0d2818" material="opacity: 0.98">
@@ -321,13 +327,11 @@
     // AR Play / Pause Toggle Button Handler
     playPauseBtn.addEventListener('click', () => {
       if (videoEl.paused) {
-        // Unmute if user explicitly pressed play
         videoEl.muted = false;
         videoEl.play().then(() => {
           playPauseBtn.setAttribute('color', '#e67e22');
           playPauseText.setAttribute('value', '❚❚ PAUSE');
         }).catch(err => {
-          // If iOS blocks audio unmuting without user setting, fallback to muted play
           videoEl.muted = true;
           videoEl.play();
           playPauseBtn.setAttribute('color', '#e67e22');
