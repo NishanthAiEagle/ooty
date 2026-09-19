@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sensory Menu">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1E070B">
+  <meta http-equiv="Permissions-Policy" content="camera=*">
+  <title>The Sensory Menu Experience</title>
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+
+    :root {
+      --bg: #1E070B;
+      --gold: #CC7A8C;
+      --gold-light: #E7B4BE;
+      --gold-dim: rgba(204,122,140,0.16);
+      --gold-border: rgba(204,122,140,0.32);
+      --ink: #2A0A10;
+      --cream: #F6ECDF;
+      --glass-dark: rgba(20,5,8,0.82);
+      --radius: 12px;
+      --radius-pill: 100px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Jost', sans-serif;
+      background: radial-gradient(130% 110% at 50% -8%, #4A1620 0%, var(--bg) 55%, #120406 100%);
+      overflow: hidden;
+      overscroll-behavior: none;
+      position: fixed;
+      touch-action: manipulation;
+    }
+
+    .a-enter-vr-button { display: none !important; }
+
+    a-scene {
+      position: fixed !important; inset: 0 !important;
+      width: 100% !important; height: 100% !important; z-index: 0 !important;
+    }
+    canvas.a-canvas {
+      width: 100% !important; height: 100% !important; position: fixed !important; inset: 0 !important;
+    }
+    video {
+      position: fixed !important; inset: 0 !important;
+      width: 100% !important; height: 100% !important; object-fit: cover !important; z-index: -1 !important;
+    }
+
+    /* ── START SCREEN ── */
+    #startScreen {
+      position: fixed; inset: 0;
+      background:
+        linear-gradient(180deg, rgba(30,7,11,0.62) 0%, rgba(30,7,11,0.8) 45%, rgba(18,4,6,0.96) 100%),
+        url('bg-collage.png') center / cover no-repeat;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 999; padding: calc(40px + var(--safe-top)) 32px calc(40px + var(--safe-bottom));
+      transition: opacity 0.4s ease;
+    }
+    #startScreen::before, #startScreen::after {
+      content: ''; position: absolute; width: 60px; height: 60px; border-color: var(--gold-border); border-style: solid;
+    }
+    #startScreen::before { top: calc(24px + var(--safe-top)); left: 24px; border-width: 1px 0 0 1px; }
+    #startScreen::after  { bottom: calc(24px + var(--safe-bottom)); right: 24px; border-width: 0 1px 1px 0; }
+
+    .start-inner { display: flex; flex-direction: column; align-items: center; max-width: 320px; width: 100%; }
+
+    .start-logo {
+      width: 72px; height: 72px; margin-bottom: 32px; padding: 14px;
+      object-fit: contain; filter: brightness(0) invert(1);
+      opacity: 0.95; border: 1px solid var(--gold-border); border-radius: 50%;
+      box-sizing: border-box;
+    }
+    .start-logo[src=""], .start-logo:not([src]) { display: none; }
+
+    #startScreen h1 {
+      font-family: 'Cormorant Garamond', serif; color: var(--cream);
+      font-size: 36px; font-weight: 300; letter-spacing: 0.01em; line-height: 1.2;
+      text-align: center; margin-bottom: 44px;
+    }
+    #startScreen h1 em { font-style: italic; color: var(--gold-light); }
+
+    #startBtn {
+      position: relative; padding: 17px 46px; font-family: 'Jost', sans-serif;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+      border: none; border-radius: var(--radius-pill);
+      background: var(--cream); color: var(--ink); cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    #startBtn:active { transform: scale(0.97); }
+    #startBtn:disabled { opacity: 0.5; }
+
+    #startHint {
+      margin-top: 18px; font-size: 10px; color: rgba(245,240,232,0.3);
+      letter-spacing: 0.05em; text-align: center; min-height: 14px;
+    }
+
+    /* ── ERROR / PERMISSION SCREEN ── */
+    #errorScreen {
+      position: fixed; inset: 0; background: var(--bg);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 1000; padding: calc(40px + var(--safe-top)) 32px calc(40px + var(--safe-bottom));
+      text-align: center;
+    }
+    #errorScreen.show { display: flex; }
+    #errorScreen .error-icon {
+      width: 48px; height: 48px; margin-bottom: 20px; opacity: 0.8;
+    }
+    #errorScreen h2 {
+      font-family: 'Cormorant Garamond', serif; color: var(--cream);
+      font-size: 24px; font-weight: 400; margin-bottom: 14px;
+    }
+    #errorScreen p {
+      color: rgba(245,240,232,0.5); font-size: 13px; line-height: 1.7;
+      max-width: 300px; margin-bottom: 10px; letter-spacing: 0.01em;
+    }
+    #errorScreen .error-steps {
+      color: rgba(245,240,232,0.4); font-size: 12px; line-height: 1.9;
+      max-width: 280px; margin: 10px 0 30px; text-align: left;
+    }
+    #errorRetryBtn {
+      padding: 14px 36px; font-size: 11px; font-weight: 600; letter-spacing: 0.2em;
+      text-transform: uppercase; border: none; border-radius: var(--radius-pill);
+      background: var(--cream); color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── LOADING ── */
+    #loadingOverlay {
+      position: fixed; inset: 0; background: var(--bg);
+      display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 998; gap: 20px;
+    }
+    #loadingOverlay.show { display: flex; }
+    .loading-ring { position: relative; width: 50px; height: 50px; }
+    .loading-ring svg { animation: spin-slow 2s linear infinite; }
+    #loadingStatus { color: rgba(245,240,232,0.4); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; }
+
+    @keyframes spin-slow { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .loading-ring svg { animation: none; }
+    }
+
+    /* ── HUD LABELS & CAROUSEL ── */
+    #logo {
+      position: fixed; top: calc(16px + var(--safe-top)); left: 16px; width: 68px; z-index: 200; opacity: 0;
+      filter: brightness(0) invert(1); transition: opacity 0.5s;
+    }
+
+    #dishLabel {
+      position: fixed; top: calc(16px + var(--safe-top)); left: 50%; transform: translateX(-50%);
+      background: var(--glass-dark); border: 1px solid var(--gold-border); border-radius: var(--radius-pill);
+      padding: 9px 24px; font-family: 'Cormorant Garamond', serif; font-size: 16px;
+      color: var(--gold-light); letter-spacing: 0.05em; z-index: 200; opacity: 0; transition: opacity 0.5s;
+    }
+
+    /* ── MARKETING HUB ── */
+    #marketingHub {
+      position: fixed; bottom: calc(125px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 210; opacity: 0; pointer-events: none;
+      transition: opacity 0.5s, transform 0.2s; width: calc(100vw - 32px); max-width: 340px;
+    }
+    #marketingHub.visible { opacity: 1; pointer-events: auto; }
+
+    .hub-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 14px 12px; border-radius: var(--radius); font-family: 'Jost', sans-serif;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+      border: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform 0.1s ease;
+      text-decoration: none;
+    }
+    .hub-btn:active { transform: scale(0.96); }
+    .hub-btn svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
+
+    #btnBook { background: var(--cream); color: var(--ink); box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+    #btnMaps { background: var(--glass-dark); color: var(--cream); border: 1px solid var(--gold-border); backdrop-filter: blur(10px); }
+
+    /* ── NATIVE AR LINK ── */
+    #btnViewAR {
+      position: fixed; bottom: calc(180px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+      display: none; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 22px; border-radius: var(--radius-pill); z-index: 210;
+      background: var(--glass-dark); border: 1px solid var(--gold-border); backdrop-filter: blur(10px);
+      color: var(--gold-light); font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+      text-decoration: none; opacity: 0; transition: opacity 0.5s; -webkit-tap-highlight-color: transparent;
+    }
+    #btnViewAR.visible { display: flex; opacity: 1; }
+    #btnViewAR svg { width: 13px; height: 13px; fill: currentColor; }
+    #arThumb { display: none; }
+
+    #dishCarousel {
+      position: fixed; bottom: calc(22px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; overflow-x: auto; max-width: calc(100vw - 24px);
+      padding: 8px 16px; background: var(--glass-dark); backdrop-filter: blur(20px);
+      border: 1px solid var(--gold-border); border-radius: 60px; z-index: 150; opacity: 0; transition: opacity 0.5s;
+      -webkit-overflow-scrolling: touch;
+    }
+    #dishCarousel::-webkit-scrollbar { display: none; }
+
+    .dish-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; flex-shrink: 0; padding: 4px 8px; border-radius: 40px; -webkit-tap-highlight-color: transparent; }
+    .dish-thumb img { width: 46px; height: 46px; object-fit: cover; border-radius: 50%; border: 1.5px solid rgba(204,122,140,0.15); }
+    .dish-thumb.active { background: var(--gold-dim); }
+    .dish-thumb.active img { border-color: var(--gold); transform: scale(1.05); }
+    .dish-thumb span { font-size: 8px; letter-spacing: 0.04em; color: rgba(245,240,232,0.4); text-transform: uppercase; }
+    .dish-thumb.active span { color: var(--gold); font-weight: 500; }
+
+    #swipeZone { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+    #swipeZone.active { pointer-events: auto; }
+    #scanHint {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center; gap: 16px; z-index: 10; opacity: 0; transition: opacity 0.5s;
+      background: var(--glass-dark); border: 1px solid var(--gold-border); border-radius: 20px;
+      backdrop-filter: blur(14px); padding: 28px 32px; max-width: 260px; text-align: center;
+    }
+    #scanHint .scan-icon { width: 44px; height: 44px; }
+    #scanHint .scan-frame-corner { fill: none; stroke: var(--gold); stroke-width: 1.5; }
+    #scanHint p.scan-title {
+      font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 500;
+      color: var(--gold-light); letter-spacing: 0.02em;
+    }
+    #scanHint p.scan-sub {
+      font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(245,240,232,0.45); line-height: 1.6; margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── START SCREEN ── -->
+  <div id="startScreen">
+    <div class="start-inner">
+      <img class="start-logo" src="logo1.png" alt="Restaurant logo" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2226%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22/%3E%3Cpath d=%22M32 16 L42 32 L32 48 L22 32 Z%22 fill=%22%23000%22/%3E%3C/svg%3E';">
+      <h1>Experience Our<br><em>Signature Creations</em></h1>
+      <button id="startBtn" aria-label="Start camera and view live menu">View Live Menu</button>
+      <div id="startHint"></div>
+    </div>
+  </div>
+
+  <!-- ── ERROR / PERMISSION SCREEN ── -->
+  <div id="errorScreen">
+    <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="#CC7A8C" stroke-width="1.2">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="13"/>
+      <circle cx="12" cy="16.3" r="0.6" fill="#CC7A8C" stroke="none"/>
+    </svg>
+    <h2 id="errorTitle">Camera Access Needed</h2>
+    <p id="errorMessage">We need your camera to bring the menu to life.</p>
+    <div class="error-steps" id="errorSteps"></div>
+    <button id="errorRetryBtn">Try Again</button>
+  </div>
+
+  <!-- ── LOADING ── -->
+  <div id="loadingOverlay">
+    <div class="loading-ring">
+      <svg viewBox="0 0 50 50" width="50" height="50" fill="none">
+        <circle cx="25" cy="25" r="22" stroke="rgba(204,122,140,0.15)" stroke-width="1"/>
+        <path d="M25 3 A22 22 0 0 1 47 25" stroke="#CC7A8C" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <p id="loadingStatus">Preparing Culinary Display</p>
+  </div>
+
+  <!-- ── OVERLAYS ── -->
+  <img src="logo1.png" id="logo" alt="Restaurant logo" onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2226%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22/%3E%3Cpath d=%22M32 16 L42 32 L32 48 L22 32 Z%22 fill=%22%23000%22/%3E%3C/svg%3E';">
+  <div id="dishLabel" role="status"><span class="label-dot"></span><span id="dishLabelText">...</span></div>
+
+  <div id="marketingHub">
+    <button class="hub-btn" id="btnBook" aria-label="Call to book a table">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.62 10.79a15.15 15.15 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.11-.27 11.72 11.72 0 0 0 3.65.58 1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1A16 16 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.72 11.72 0 0 0 .58 3.65 1 1 0 0 1-.27 1.11z"/></svg>
+      Book Table
+    </button>
+    <button class="hub-btn" id="btnMaps" aria-label="Get directions to restaurant">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      Directions
+    </button>
+  </div>
+
+  <a id="btnViewAR" rel="ar" aria-label="View this dish in AR using your phone's native viewer">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7v10l10 5 10-5V7L12 2zm0 2.3 6.5 3.25L12 10.8 5.5 7.55 12 4.3zM4 9.2l7 3.5v7.6l-7-3.5V9.2zm9 11.1v-7.6l7-3.5v7.6l-7 3.5z"/></svg>
+    <span>View in Your Space</span>
+    <img id="arThumb" alt="">
+  </a>
+
+  <div id="swipeZone"></div>
+  <div id="dishCarousel" role="tablist" aria-label="Dish selector"></div>
+
+  <div id="scanHint">
+    <svg class="scan-icon" viewBox="0 0 48 48" aria-hidden="true">
+      <path class="scan-frame-corner" d="M6 16V8h8"/>
+      <path class="scan-frame-corner" d="M42 16V8h-8"/>
+      <path class="scan-frame-corner" d="M6 32v8h8"/>
+      <path class="scan-frame-corner" d="M42 32v8h-8"/>
+      <rect x="15" y="17" width="18" height="14" rx="2" fill="none" stroke="#CC7A8C" stroke-width="1.3"/>
+      <circle cx="24" cy="24" r="4" fill="none" stroke="#CC7A8C" stroke-width="1.3"/>
+    </svg>
+    <p class="scan-title">Point your camera at the card</p>
+    <p class="scan-sub">To bring the live menu to life</p>
+  </div>
+
+  <a-scene
+    id="arScene"
+    mindar-image="imageTargetSrc: ./targets/card.mind; maxTrack: 1; filterMinCF: 0.05; filterBeta: 8; uiLoading: no; uiError: no; uiScanning: no"
+    renderer="colorManagement: true; antialias: true; precision: mediump; physicallyCorrectLights: true"
+    loading-screen="enabled: false" vr-mode-ui="enabled: false" xr-mode-ui="enabled: false"
+    style="visibility:hidden; opacity:0; pointer-events:none;">
+
+    <a-assets timeout="30000"></a-assets>
+
+    <a-light type="ambient" color="#ffffff" intensity="1.6"></a-light>
+    <a-light type="directional" color="#ffffff" intensity="1.4" position="1 3 2"></a-light>
+    <a-light type="directional" color="#ffe9c0" intensity="0.8" position="-2 2 -1"></a-light>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <a-entity id="target1" mindar-image-target="targetIndex: 0">
+      <a-entity id="rotationWrapper" position="0 0 0" rotation="0 0 0">
+        <a-entity id="modelEntity" position="0 0 0" rotation="90 0 0" scale="1 1 1" gltf-model=""></a-entity>
+      </a-entity>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    /* ══════════════════════════════════════
+       CHOCOLATE MODEL DATA
+       (Oriented flat on card: rotation="90 0 0")
+    ══════════════════════════════════════ */
+    const dishes = [
+      { 
+        name: "Almond Chocolate",       
+        folder: "almond_chocolate",       
+        model: "almond_chocolate.glb",       
+        usdz: "almond_chocolate.usdz",       
+        thumb: "almond_chocolate.jpg",       
+        scale: "1 1 1",   
+        rotation: "90 0 0" 
+      },
+      { 
+        name: "Cashew Nut Chocolate",     
+        folder: "cashew_nut_chocolate",     
+        model: "cashew_nut_chocolate.glb",     
+        usdz: "cashew_nut_chocolate.usdz",     
+        thumb: "cashew_nut_chocolate.jpg",     
+        scale: "1 1 1",    
+        rotation: "90 0 0" 
+      },
+      { 
+        name: "Mix Chocolate", 
+        folder: "mix_chocolate", 
+        model: "mix_chocolate.glb", 
+        usdz: "mix_chocolate.usdz", 
+        thumb: "mix_chocolate.jpg", 
+        scale: "1 1 1",    
+        rotation: "90 0 0" 
+      },
+      { 
+        name: "White Chocolate",    
+        folder: "white_choclate",    
+        model: "white_choclate.glb",    
+        usdz: "white_choclate.usdz",    
+        thumb: "white_choclate.jpg",    
+        scale: "1 1 1", 
+        rotation: "90 0 0" 
+      },
+    ];
+
+    let currentIndex = -1;
+    let arStarted = false;
+    let readyTimeoutId = null;
+
+    const modelEntity     = document.querySelector('#modelEntity');
+    const rotationWrapper = document.querySelector('#rotationWrapper');
+    const dishLabel       = document.querySelector('#dishLabel');
+    const dishLabelText   = document.querySelector('#dishLabelText');
+    const carousel        = document.querySelector('#dishCarousel');
+    const marketingHub    = document.querySelector('#marketingHub');
+    const logo            = document.querySelector('#logo');
+    const scanHint        = document.querySelector('#scanHint');
+    const target          = document.querySelector('#target1');
+    const arScene         = document.querySelector('#arScene');
+    const startScreen     = document.querySelector('#startScreen');
+    const startBtn        = document.querySelector('#startBtn');
+    const loadingOverlay  = document.querySelector('#loadingOverlay');
+    const swipeZone       = document.querySelector('#swipeZone');
+    const errorScreen     = document.querySelector('#errorScreen');
+    const errorTitle      = document.querySelector('#errorTitle');
+    const errorMessage    = document.querySelector('#errorMessage');
+    const errorSteps      = document.querySelector('#errorSteps');
+    const errorRetryBtn   = document.querySelector('#errorRetryBtn');
+    const btnViewAR       = document.querySelector('#btnViewAR');
+    const arThumb         = document.querySelector('#arThumb');
+
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
+    const isSecure = window.isSecureContext || location.hostname === 'localhost';
+    const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const videoObserver = new MutationObserver(() => {
+      const vid = arScene.querySelector('video');
+      if (vid) {
+        vid.setAttribute('playsinline', '');
+        vid.setAttribute('webkit-playsinline', '');
+        vid.setAttribute('muted', '');
+        vid.muted = true;
+        vid.setAttribute('autoplay', '');
+        vid.play().catch(() => {});
+        videoObserver.disconnect();
+      }
+    });
+    videoObserver.observe(arScene, { childList: true, subtree: true });
+
+    function vibrate(pattern) {
+      try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+    }
+
+    function setupNativeARLink(dish) {
+      if (isIOS) {
+        btnViewAR.href = `3d-model/${dish.folder}/${dish.usdz}`;
+        arThumb.src = `3d-model/${dish.folder}/${dish.thumb}`;
+        btnViewAR.classList.add('visible');
+      } else if (isAndroid) {
+        const absoluteModelUrl = new URL(`3d-model/${dish.folder}/${dish.model}`, window.location.href).href;
+        const fallbackUrl = window.location.href;
+        const intent = `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(absoluteModelUrl)}&mode=ar_preferred#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end;`;
+        btnViewAR.href = intent;
+        btnViewAR.removeAttribute('rel');
+        btnViewAR.classList.add('visible');
+      } else {
+        btnViewAR.classList.remove('visible');
+      }
+    }
+
+    dishes.forEach((dish, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'dish-thumb' + (i === 0 ? ' active' : '');
+      thumb.setAttribute('role', 'tab');
+      thumb.setAttribute('tabindex', '0');
+      thumb.setAttribute('aria-label', `View ${dish.name}`);
+      thumb.innerHTML = `
+        <img src="3d-model/${dish.folder}/${dish.thumb}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2246%22 height=%2246%22%3E%3Crect width=%2246%22 height=%2246%22 rx=%2223%22 fill=%22%231a1510%22/%3E%3C/svg%3E'">
+        <span>${dish.name.split(' ')[0]}</span>
+      `;
+      thumb.addEventListener('click', () => selectDish(i));
+      thumb.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDish(i); } });
+      carousel.appendChild(thumb);
+    });
+
+    function preloadModel(dish) {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'fetch';
+      link.href = `3d-model/${dish.folder}/${dish.model}`;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+
+    function selectDish(index) {
+      if (index === currentIndex) return;
+      currentIndex = index;
+      const dish = dishes[index];
+
+      modelEntity.removeAttribute('gltf-model');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          modelEntity.setAttribute('gltf-model', `3d-model/${dish.folder}/${dish.model}`);
+          modelEntity.setAttribute('scale', dish.scale);
+          modelEntity.setAttribute('rotation', dish.rotation);
+        });
+      });
+
+      dishLabelText.textContent = dish.name;
+      document.querySelectorAll('.dish-thumb').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+        el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+      });
+
+      setupNativeARLink(dish);
+      vibrate(15);
+
+      const nextDish = dishes[(index + 1) % dishes.length];
+      preloadModel(nextDish);
+    }
+
+    /* Turntable spin on the target's face */
+    if (!prefersReducedMotion) {
+      rotationWrapper.setAttribute('animation', 'property: rotation; to: 0 0 360; dur: 14000; easing: linear; loop: true');
+    }
+
+    function showError(kind) {
+      loadingOverlay.classList.remove('show');
+      startScreen.style.display = 'none';
+      errorScreen.classList.add('show');
+
+      if (kind === 'unsupported') {
+        errorTitle.textContent = 'Camera Not Available';
+        errorMessage.textContent = "Your browser doesn't support camera access, or this page isn't loaded securely.";
+        errorSteps.innerHTML = !isSecure
+          ? '• Make sure this page is loaded over https://<br>• Try opening it in Safari (iOS) or Chrome (Android)'
+          : '• Try opening this link in Safari (iOS) or Chrome (Android)';
+        errorRetryBtn.style.display = 'none';
+      } else if (kind === 'denied') {
+        errorTitle.textContent = 'Camera Access Needed';
+        errorMessage.textContent = 'Camera permission was denied.';
+        errorSteps.innerHTML = isIOS
+          ? '• Open Settings → Safari → Camera → Allow<br>• Reload this page'
+          : '• Tap site settings in address bar → Camera → Allow<br>• Reload this page';
+        errorRetryBtn.style.display = 'inline-block';
+      } else if (kind === 'notfound') {
+        errorTitle.textContent = 'No Camera Found';
+        errorMessage.textContent = "We couldn't detect a camera on this device.";
+        errorSteps.innerHTML = '';
+        errorRetryBtn.style.display = 'inline-block';
+      } else {
+        errorTitle.textContent = 'Something Went Wrong';
+        errorMessage.textContent = "We couldn't start the camera. Please try again.";
+        errorSteps.innerHTML = '';
+        errorRetryBtn.style.display = 'inline-block';
+      }
+    }
+
+    function hideError() {
+      errorScreen.classList.remove('show');
+    }
+
+    async function startAR() {
+      if (arStarted) return;
+
+      if (!isSecure || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('unsupported');
+        return;
+      }
+
+      hideError();
+      startScreen.style.opacity = '0';
+      setTimeout(() => { startScreen.style.display = 'none'; }, 400);
+      loadingOverlay.classList.add('show');
+      startBtn.disabled = true;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        stream.getTracks().forEach(t => t.stop());
+
+        arScene.style.visibility = 'visible';
+        arScene.style.opacity = '1';
+        arScene.style.pointerEvents = 'auto';
+
+        let readyFired = false;
+        const onReady = () => {
+          if (readyFired) return;
+          readyFired = true;
+          if (readyTimeoutId) clearTimeout(readyTimeoutId);
+
+          loadingOverlay.classList.remove('show');
+          scanHint.style.opacity = '1';
+          arStarted = true;
+          swipeZone.classList.add('active');
+          [carousel, logo, dishLabel].forEach(el => el.style.opacity = '1');
+          marketingHub.classList.add('visible');
+          selectDish(0);
+        };
+
+        arScene.addEventListener('loaded', onReady, { once: true });
+        arScene.addEventListener('arReady', onReady, { once: true });
+        readyTimeoutId = setTimeout(onReady, 7000);
+
+      } catch (err) {
+        console.error(err);
+        startBtn.disabled = false;
+        if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError')) {
+          showError('denied');
+        } else if (err && (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')) {
+          showError('notfound');
+        } else {
+          showError('generic');
+        }
+      }
+    }
+
+    startBtn.addEventListener('click', startAR);
+    errorRetryBtn.addEventListener('click', () => {
+      hideError();
+      startScreen.style.display = 'flex';
+      requestAnimationFrame(() => { startScreen.style.opacity = '1'; });
+    });
+
+    document.querySelector('#btnBook').addEventListener('click', () => {
+      window.location.href = 'tel:+918068365604';
+    });
+
+    document.querySelector('#btnMaps').addEventListener('click', () => {
+      window.location.href = 'https://maps.app.goo.gl/AQLNLsv3XV2B6FiQ8';
+    });
+
+    target.addEventListener('targetFound', () => {
+      dishLabel.style.opacity = '1';
+      scanHint.style.opacity = '0';
+      vibrate(20);
+    });
+
+    target.addEventListener('targetLost', () => {
+      dishLabel.style.opacity = '0';
+      scanHint.style.opacity = '1';
+    });
+
+    arScene.addEventListener('arError', () => {
+      showError('generic');
+    });
+
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.onkeydown = function(e) {
+      if (e.keyCode === 123) return false;
+      if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67 || e.keyCode === 75)) return false;
+      if (e.ctrlKey && e.keyCode === 85) return false;
+    };
+  </script>
+</body>
+</html>
