@@ -14,6 +14,19 @@
       margin: 0;
       overflow: hidden;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #000;
+    }
+
+    /* CRITICAL FIX: Hide the raw HTML video element off-screen completely */
+    #arVideo {
+      position: absolute !important;
+      top: -9999px !important;
+      left: -9999px !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      z-index: -9999 !important;
     }
 
     /* Screen UI Overlay */
@@ -93,7 +106,7 @@
   <div id="ui-container">
     <div class="scan-pill" id="scanPrompt">Point Camera at Ooty Card</div>
 
-    <!-- On-screen Navigation Dock -->
+    <!-- Screen Navigation Dock -->
     <div id="active-info-bar">
       <div>
         <div id="info-title">Location Name</div>
@@ -104,8 +117,8 @@
     </div>
   </div>
 
-  <!-- HTML5 Video element configured for iOS Safari inline playback -->
-  <video id="arVideo" crossOrigin="anonymous" playsinline webkit-playsinline preload="auto" loop></video>
+  <!-- HTML5 Video element configured for iOS texture extraction (completely invisible in 2D DOM) -->
+  <video id="arVideo" crossOrigin="anonymous" playsinline webkit-playsinline preload="auto" loop muted></video>
 
   <!-- MindAR Scene -->
   <a-scene 
@@ -137,7 +150,7 @@
         <!-- Inner Bezel (Matte Black Screen Well) -->
         <a-plane position="0 0.05 -0.005" width="0.74" height="0.425" color="#000000" material="opacity: 1"></a-plane>
 
-        <!-- Video Surface (Calibrated exactly to standard 16:9 widescreen) -->
+        <!-- Video Surface (Strictly bound inside the black bezel) -->
         <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0.05 0.005"></a-video>
         
         <!-- Header Banner -->
@@ -269,7 +282,6 @@
     };
 
     const videoEl = document.getElementById('arVideo');
-    const videoPlane = document.getElementById('videoPlane');
     const screenGroup = document.getElementById('videoScreenGroup');
     const arTitle = document.getElementById('arVideoTitle');
     const playPauseBtn = document.getElementById('arPlayPauseBtn');
@@ -278,24 +290,6 @@
     const infoTitle = document.getElementById('info-title');
     const infoTime = document.getElementById('info-time');
     const mapsLink = document.getElementById('mapsLink');
-
-    // Auto-fit video geometry inside maximum frame boundary (width: 0.72, height: 0.405)
-    videoEl.addEventListener('loadedmetadata', () => {
-      const maxWidth = 0.72;
-      const maxHeight = 0.405;
-      const aspect = videoEl.videoWidth / videoEl.videoHeight;
-
-      let targetWidth = maxWidth;
-      let targetHeight = maxWidth / aspect;
-
-      if (targetHeight > maxHeight) {
-        targetHeight = maxHeight;
-        targetWidth = maxHeight * aspect;
-      }
-
-      videoPlane.setAttribute('width', targetWidth.toFixed(3));
-      videoPlane.setAttribute('height', targetHeight.toFixed(3));
-    });
 
     // Attach click listeners to landmark buttons
     document.querySelectorAll('.spot-btn').forEach(btn => {
@@ -327,11 +321,17 @@
     // AR Play / Pause Toggle Button Handler
     playPauseBtn.addEventListener('click', () => {
       if (videoEl.paused) {
+        // Unmute if user explicitly pressed play
+        videoEl.muted = false;
         videoEl.play().then(() => {
           playPauseBtn.setAttribute('color', '#e67e22');
           playPauseText.setAttribute('value', '❚❚ PAUSE');
         }).catch(err => {
-          console.warn("Playback error on iOS:", err);
+          // If iOS blocks audio unmuting without user setting, fallback to muted play
+          videoEl.muted = true;
+          videoEl.play();
+          playPauseBtn.setAttribute('color', '#e67e22');
+          playPauseText.setAttribute('value', '❚❚ PAUSE');
         });
       } else {
         videoEl.pause();
