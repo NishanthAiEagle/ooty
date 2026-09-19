@@ -191,7 +191,7 @@
       right: 16px;
       max-width: 420px;
       margin: 0 auto;
-      background: rgba(9,17,27,0.72);
+      background: rgba(9,17,27,0.5);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(51,230,255,0.55);
@@ -445,89 +445,89 @@
       <a-entity id="videoScreenGroup" position="0 0.65 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
 
         <!-- Glass backing plate (extended to cover the Directions row) -->
-        <a-plane position="0 -0.0935 -0.012" width="0.74" height="0.715" color="#0a1420" material="opacity: 0.85; roughness: 0.9; metalness: 0.3"></a-plane>
+        <a-plane position="0 -0.0935 -0.012" width="0.74" height="0.715" color="#0a1420" material="opacity: 0.35; roughness: 0.9; metalness: 0.3"></a-plane>
 
         <!-- Thin cyan edge -->
-        <a-plane position="0 -0.0935 -0.013" width="0.744" height="0.719" color="#33e6ff" material="opacity: 0.5"></a-plane>
+        <a-plane position="0 -0.0935 -0.013" width="0.744" height="0.719" color="#33e6ff" material="opacity: 0.6"></a-plane>
 
         <!-- Video Surface, flush edge-to-edge -->
         <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
 
         <!-- Header Banner -->
-        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#0c1a2a" material="opacity: 0.96">
+        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#0c1a2a" material="opacity: 0.6">
           <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#a9f6ff" width="1.0" baseline="center"></a-text>
         </a-plane>
         <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.85"></a-plane>
 
         <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
-        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#33e6ff"
+        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#33e6ff" material="opacity: 0.8"
                  animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
           <a-text id="playPauseText" value="&#9654; PLAY VIDEO" align="center" color="#030507" width="1.1"></a-text>
         </a-plane>
 
         <!-- Close Button -->
-        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#ff4f81">
+        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#ff4f81" material="opacity: 0.8">
           <a-text value="&#10005; CLOSE" align="center" color="#030507" width="1.05"></a-text>
         </a-plane>
 
         <!-- Distance Tab — sits right below the Play/Close row -->
-        <a-plane id="arDistanceTabBg" position="0 -0.3275 0.01" width="0.72" height="0.055" color="#0c1a2a" material="opacity: 0.96">
+        <a-plane id="arDistanceTabBg" position="0 -0.3275 0.01" width="0.72" height="0.055" color="#0c1a2a" material="opacity: 0.6">
           <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" color="#33e6ff" width="1.35" baseline="center"></a-text>
         </a-plane>
 
         <!-- Directions Button — full-width third row, opens Google Maps -->
-        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.405 0.02" width="0.72" height="0.06" color="#a9f6ff">
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.405 0.02" width="0.72" height="0.06" color="#a9f6ff" material="opacity: 0.8">
           <a-text value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
         </a-plane>
       </a-entity>
 
       <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD ================= -->
-      <a-plane class="clickable spot-btn" data-id="ooty_lake" data-icon="wave" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="ooty_lake" data-icon="wave" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 0">
         <a-text value="Ooty Lake\n(13 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="pykara" data-icon="drop" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="pykara" data-icon="drop" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 200">
         <a-text value="Pykara Lake\n(55 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="rose_garden" data-icon="leaf" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="rose_garden" data-icon="leaf" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 400">
         <a-text value="Rose Garden\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="botanical_garden" data-icon="leaf" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="botanical_garden" data-icon="leaf" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 600">
         <a-text value="Botanical Garden\n(5 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="murugan_temple" data-icon="temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="murugan_temple" data-icon="temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 800">
         <a-text value="Murugan Temple\n(8 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="govt_museum" data-icon="museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="govt_museum" data-icon="museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1000">
         <a-text value="Govt Museum\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="doddabetta" data-icon="peak" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="doddabetta" data-icon="peak" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1200">
         <a-text value="Doddabetta Peak\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="pine_forest" data-icon="pine" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="pine_forest" data-icon="pine" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1400">
         <a-text value="Pine Forest\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="avalanche" data-icon="drop" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="avalanche" data-icon="drop" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1600">
         <a-text value="Avalanche Lake\n(1 hr 15 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="mudumalai" data-icon="paw" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.85"
+      <a-plane class="clickable spot-btn" data-id="mudumalai" data-icon="paw" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
                animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1800">
         <a-text value="Mudumalai Park\n(1 hr 20 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
       </a-plane>
