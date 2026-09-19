@@ -93,7 +93,7 @@
   <div id="ui-container">
     <div class="scan-pill" id="scanPrompt">Point Camera at Ooty Card</div>
 
-    <!-- On-screen Navigation Dock for easy finger tapping -->
+    <!-- On-screen Navigation Dock -->
     <div id="active-info-bar">
       <div>
         <div id="info-title">Location Name</div>
@@ -128,82 +128,75 @@
       <!-- ================= 1. THE FLOATING 3D BILLBOARD SCREEN ================= -->
       <a-entity id="videoScreenGroup" position="0 0.58 0.12" rotation="15 0 0" visible="false">
         
-        <!-- Frame Structure -->
-        <a-plane position="0 0.02 -0.01" width="0.84" height="0.54" color="#081c10" material="opacity: 0.98; roughness: 0.8; metalness: 0.2">
-        </a-plane>
-        <a-plane position="0 0.02 -0.008" width="0.82" height="0.52" color="#d4af37" material="wireframe: false; opacity: 0.8">
-        </a-plane>
+        <!-- Outer Dark Forest Green Backing -->
+        <a-plane position="0 0.03 -0.01" width="0.86" height="0.58" color="#081c10" material="opacity: 1; roughness: 0.8; metalness: 0.2"></a-plane>
 
-        <!-- Video Surface -->
-        <a-video id="videoPlane" src="#arVideo" width="0.78" height="0.42" position="0 0.05 0.01"></a-video>
+        <!-- Outer Gold Trim -->
+        <a-plane position="0 0.03 -0.008" width="0.84" height="0.56" color="#d4af37" material="opacity: 0.9"></a-plane>
+
+        <!-- Inner Bezel (Matte Black Screen Well) -->
+        <a-plane position="0 0.05 -0.005" width="0.74" height="0.425" color="#000000" material="opacity: 1"></a-plane>
+
+        <!-- Video Surface (Calibrated exactly to standard 16:9 widescreen) -->
+        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0.05 0.005"></a-video>
         
-        <!-- Header Ribbon -->
-        <a-plane position="0 0.23 0.02" width="0.78" height="0.06" color="#0d2818" material="opacity: 0.95">
-          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#f3e5ab" width="1.1"></a-text>
+        <!-- Header Banner -->
+        <a-plane position="0 0.27 0.01" width="0.80" height="0.06" color="#0d2818" material="opacity: 0.98">
+          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#f3e5ab" width="1.1" baseline="center"></a-text>
         </a-plane>
 
         <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
-        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.16 -0.18 0.02" width="0.38" height="0.07" color="#27ae60">
+        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.16 -0.20 0.02" width="0.38" height="0.07" color="#27ae60">
           <a-text id="playPauseText" value="▶ PLAY VIDEO" align="center" color="#ffffff" width="1.1"></a-text>
         </a-plane>
 
         <!-- Close Button -->
-        <a-plane id="arCloseBtn" class="clickable" position="0.22 -0.18 0.02" width="0.26" height="0.07" color="#c0392b">
+        <a-plane id="arCloseBtn" class="clickable" position="0.22 -0.20 0.02" width="0.26" height="0.07" color="#c0392b">
           <a-text value="✕ CLOSE" align="center" color="#ffffff" width="1.05"></a-text>
         </a-plane>
 
-        <!-- Structural Billboard Legs -->
-        <a-cylinder position="-0.32 -0.32 -0.02" radius="0.006" height="0.26" color="#d4af37" opacity="0.8"></a-cylinder>
-        <a-cylinder position="0.32 -0.32 -0.02" radius="0.006" height="0.26" color="#d4af37" opacity="0.8"></a-cylinder>
+        <!-- Structural Billboard Anchors -->
+        <a-cylinder position="-0.34 -0.34 -0.02" radius="0.006" height="0.28" color="#d4af37" opacity="0.85"></a-cylinder>
+        <a-cylinder position="0.34 -0.34 -0.02" radius="0.006" height="0.28" color="#d4af37" opacity="0.85"></a-cylinder>
       </a-entity>
 
       <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD ================= -->
-      <!-- Ooty Lake (Center Top-Left) -->
       <a-plane class="clickable spot-btn" data-id="ooty_lake" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Ooty Lake\n(13 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Pykara Lake & Falls (Far Top-Left) -->
       <a-plane class="clickable spot-btn" data-id="pykara" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#081c10" material="opacity: 0.85">
         <a-text value="Pykara Lake\n(55 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Rose Garden (Mid Left) -->
       <a-plane class="clickable spot-btn" data-id="rose_garden" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Rose Garden\n(4 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Botanical Garden (Lower Left) -->
       <a-plane class="clickable spot-btn" data-id="botanical_garden" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Botanical Garden\n(5 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Elk Hill Murugan Temple (Bottom Left) -->
       <a-plane class="clickable spot-btn" data-id="murugan_temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Murugan Temple\n(8 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Government Museum (Center Right) -->
       <a-plane class="clickable spot-btn" data-id="govt_museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Govt Museum\n(4 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Doddabetta Peak (Mid Right) -->
       <a-plane class="clickable spot-btn" data-id="doddabetta" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Doddabetta Peak\n(35 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Pine Forest (Bottom Center / Right) -->
       <a-plane class="clickable spot-btn" data-id="pine_forest" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Pine Forest\n(35 min)" align="center" color="#f3e5ab" width="0.65"></a-text>
       </a-plane>
 
-      <!-- Avalanche Lake (Far Right) -->
       <a-plane class="clickable spot-btn" data-id="avalanche" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Avalanche Lake\n(1 hr 15 min)" align="center" color="#f3e5ab" width="0.62"></a-text>
       </a-plane>
 
-      <!-- Mudumalai National Park (Top Right Peak) -->
       <a-plane class="clickable spot-btn" data-id="mudumalai" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#081c10" material="opacity: 0.85">
         <a-text value="Mudumalai Park\n(1 hr 20 min)" align="center" color="#f3e5ab" width="0.62"></a-text>
       </a-plane>
@@ -276,6 +269,7 @@
     };
 
     const videoEl = document.getElementById('arVideo');
+    const videoPlane = document.getElementById('videoPlane');
     const screenGroup = document.getElementById('videoScreenGroup');
     const arTitle = document.getElementById('arVideoTitle');
     const playPauseBtn = document.getElementById('arPlayPauseBtn');
@@ -285,6 +279,24 @@
     const infoTime = document.getElementById('info-time');
     const mapsLink = document.getElementById('mapsLink');
 
+    // Auto-fit video geometry inside maximum frame boundary (width: 0.72, height: 0.405)
+    videoEl.addEventListener('loadedmetadata', () => {
+      const maxWidth = 0.72;
+      const maxHeight = 0.405;
+      const aspect = videoEl.videoWidth / videoEl.videoHeight;
+
+      let targetWidth = maxWidth;
+      let targetHeight = maxWidth / aspect;
+
+      if (targetHeight > maxHeight) {
+        targetHeight = maxHeight;
+        targetWidth = maxHeight * aspect;
+      }
+
+      videoPlane.setAttribute('width', targetWidth.toFixed(3));
+      videoPlane.setAttribute('height', targetHeight.toFixed(3));
+    });
+
     // Attach click listeners to landmark buttons
     document.querySelectorAll('.spot-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -292,7 +304,7 @@
         const data = PLACES[id];
         if (!data) return;
 
-        // 1. Stage the video in paused state (No Autoplay)
+        // 1. Stage the video in paused state
         videoEl.pause();
         videoEl.src = data.video;
         videoEl.load();
@@ -312,7 +324,7 @@
       });
     });
 
-    // AR Play / Pause Toggle Button Handler (Fulfills iOS user interaction requirement)
+    // AR Play / Pause Toggle Button Handler
     playPauseBtn.addEventListener('click', () => {
       if (videoEl.paused) {
         videoEl.play().then(() => {
