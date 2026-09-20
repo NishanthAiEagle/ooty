@@ -183,7 +183,7 @@
       opacity: 0;
     }
 
-    /* Screen fallback dock for Maps navigation — HUD target-lock panel (two rows) */
+    /* Screen fallback dock for Maps navigation — HUD target-lock panel */
     #active-info-bar {
       position: fixed;
       bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* clears the browser toolbar */
@@ -198,7 +198,7 @@
       border-radius: 4px;
       padding: 14px 16px;
       display: flex;
-      flex-wrap: wrap;              /* allows the second row */
+      flex-wrap: wrap;
       align-items: center;
       gap: 12px;
       pointer-events: none;
@@ -250,35 +250,6 @@
     }
 
     .dock-divider { display: none; }
-
-    .btn-maps {
-      order: 3;
-      flex: 1 1 100%;               /* full-width second row */
-      justify-content: center;
-      background: var(--cyan);
-      color: var(--ink);
-      text-decoration: none;
-      font-family: 'Rajdhani', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      padding: 12px 14px;
-      border-radius: 4px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
-    }
-
-    .btn-maps svg { flex: none; }
-
-    .btn-maps:active { transform: scale(0.97); }
-
-    .btn-maps:hover {
-      background: var(--cyan-soft);
-      box-shadow: 0 4px 16px rgba(51,230,255,0.55);
-    }
 
     .btn-close {
       order: 2;
@@ -334,9 +305,9 @@
        and let long dock titles wrap to two lines. English styling is untouched. */
     html[lang="ta"] body *, html[lang="hi"] body * { letter-spacing: normal !important; }
     html[lang="ta"] .scan-pill, html[lang="ta"] #info-title, html[lang="ta"] #info-time,
-    html[lang="ta"] .btn-maps, html[lang="ta"] #boot-loader span, html[lang="ta"] #lang-toggle button { font-family: 'Noto Sans Tamil', sans-serif; }
+    html[lang="ta"] #boot-loader span, html[lang="ta"] #lang-toggle button { font-family: 'Noto Sans Tamil', sans-serif; }
     html[lang="hi"] .scan-pill, html[lang="hi"] #info-title, html[lang="hi"] #info-time,
-    html[lang="hi"] .btn-maps, html[lang="hi"] #boot-loader span, html[lang="hi"] #lang-toggle button { font-family: 'Noto Sans Devanagari', sans-serif; }
+    html[lang="hi"] #boot-loader span, html[lang="hi"] #lang-toggle button { font-family: 'Noto Sans Devanagari', sans-serif; }
     html[lang="ta"] #info-title, html[lang="hi"] #info-title {
       white-space: normal;
       display: -webkit-box;
@@ -444,7 +415,7 @@
       <button type="button" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button>
     </div>
 
-    <!-- Screen Navigation Dock (two rows: title/time/close, then full-width Directions) -->
+    <!-- Screen Navigation Dock (title/time + close button) -->
     <div id="active-info-bar">
       <span class="corner corner-tl"></span>
       <span class="corner corner-tr"></span>
@@ -455,13 +426,6 @@
         <div id="info-time">Drive time &middot; --</div>
       </div>
       <div class="dock-divider"></div>
-      <a id="mapsLink" href="#" target="_blank" rel="noopener" class="btn-maps">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9"/>
-          <path d="M15 9l-2.2 5.8L9 17l2.2-5.8L15 9z" fill="currentColor" stroke="none"/>
-        </svg>
-        <span id="mapsLabel">Directions</span>
-      </a>
       <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
       </button>
@@ -827,10 +791,8 @@
     const bottomBar = document.getElementById('active-info-bar');
     const infoTitle = document.getElementById('info-title');
     const infoTime = document.getElementById('info-time');
-    const mapsLink = document.getElementById('mapsLink');
     const bootLoader = document.getElementById('boot-loader');
     const bootText = document.getElementById('bootText');
-    const mapsLabel = document.getElementById('mapsLabel');
     const dockCloseBtn = document.querySelector('.btn-close');
     const txtDirections = document.getElementById('txtDirections');
     const altTitle = document.getElementById('altTitle');
@@ -1126,7 +1088,6 @@
       langButtons.forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)));
 
       bootText.textContent = ui('boot');
-      mapsLabel.textContent = ui('directions');
       dockCloseBtn.setAttribute('aria-label', ui('close'));
       updateScanText();
 
@@ -1195,7 +1156,6 @@
 
         currentMapsUrl = data.maps;
 
-        mapsLink.href = data.maps;
         bottomBar.classList.add('active');
         document.body.classList.add('spot-open');
 
