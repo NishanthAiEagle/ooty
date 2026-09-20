@@ -12,7 +12,7 @@
   <!-- HUD type pairing: an angular display face for labels, a condensed tech grotesk for body -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+Tamil:wght@500;600;700&family=Noto+Sans+Devanagari:wght@500;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
@@ -299,6 +299,52 @@
     .btn-close:hover { background: rgba(255,79,129,0.12); border-color: var(--magenta); color: var(--magenta); }
     .btn-close:active { transform: scale(0.88); }
 
+    /* Language toggle, under the scan pill. Always visible; 40px-high tap targets. */
+    #lang-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+      padding: 4px;
+      background: rgba(9,17,27,0.94);
+      border: 1px solid rgba(51,230,255,0.45);
+      border-radius: 999px;
+      pointer-events: auto;
+    }
+
+    #lang-toggle button {
+      min-width: 52px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--cyan-soft);
+      font-family: 'Rajdhani', 'Noto Sans Tamil', 'Noto Sans Devanagari', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    #lang-toggle button[aria-pressed="true"] { background: var(--cyan); color: var(--ink); }
+    #lang-toggle button:focus-visible { outline: 2px solid var(--ice); outline-offset: 1px; }
+
+    /* Tamil and Hindi only: use the Noto faces, drop letter-spacing (it breaks letter joining),
+       and let long dock titles wrap to two lines. English styling is untouched. */
+    html[lang="ta"] body *, html[lang="hi"] body * { letter-spacing: normal !important; }
+    html[lang="ta"] .scan-pill, html[lang="ta"] #info-title, html[lang="ta"] #info-time,
+    html[lang="ta"] .btn-maps, html[lang="ta"] #boot-loader span, html[lang="ta"] #lang-toggle button { font-family: 'Noto Sans Tamil', sans-serif; }
+    html[lang="hi"] .scan-pill, html[lang="hi"] #info-title, html[lang="hi"] #info-time,
+    html[lang="hi"] .btn-maps, html[lang="hi"] #boot-loader span, html[lang="hi"] #lang-toggle button { font-family: 'Noto Sans Devanagari', sans-serif; }
+    html[lang="ta"] #info-title, html[lang="hi"] #info-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.5;
+    }
+
     /* Boot loader — radar sweep instead of a generic spinner */
     #boot-loader {
       position: fixed;
@@ -373,7 +419,7 @@
         <circle cx="27" cy="27" r="2.4" fill="#33e6ff"/>
       </svg>
     </div>
-    <span>Calibrating AR interface&hellip;</span>
+    <span id="bootText">Calibrating AR interface&hellip;</span>
   </div>
 
   <div id="scan-sweep"></div>
@@ -391,6 +437,13 @@
     </div>
     <div class="pill-rule"></div>
 
+    <!-- Language toggle -->
+    <div id="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ta" lang="ta" aria-pressed="false">தமிழ்</button>
+      <button type="button" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button>
+    </div>
+
     <!-- Screen Navigation Dock (two rows: title/time/close, then full-width Directions) -->
     <div id="active-info-bar">
       <span class="corner corner-tl"></span>
@@ -407,7 +460,7 @@
           <circle cx="12" cy="12" r="9"/>
           <path d="M15 9l-2.2 5.8L9 17l2.2-5.8L15 9z" fill="currentColor" stroke="none"/>
         </svg>
-        Directions
+        <span id="mapsLabel">Directions</span>
       </a>
       <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
@@ -465,6 +518,8 @@
         <a-plane position="0 0.2625 0.01" width="0.72" height="0.12" color="#0c1a2a" material="opacity: 0.6"></a-plane>
         <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.85"></a-plane>
         <a-text id="arVideoTitle" value="LOCATION TITLE" align="left" anchor="left" baseline="center" color="#a9f6ff" width="1.0" position="-0.335 0.2925 0.012"></a-text>
+        <!-- Tamil / Hindi version of the title (a-text cannot shape those scripts); hidden in English -->
+        <a-image id="altTitle" width="0.62" height="0.06" position="-0.025 0.2925 0.012" visible="false"></a-image>
 
         <!-- Distance pill: one plane plus two end circles, resized to fit its text by fitPill() -->
         <a-entity id="arDistPill" position="-0.335 0.2345 0.012">
@@ -472,6 +527,7 @@
           <a-circle id="pillL" position="0.019 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
           <a-circle id="pillR" position="0.381 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
           <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" baseline="center" color="#33e6ff" width="0.9" position="0.2 0 0.002"></a-text>
+          <a-image id="altDistance" width="0.56" height="0.038" position="0.2 0 0.003" visible="false"></a-image>
         </a-entity>
 
         <!-- Close: small icon with a larger invisible tap area around it -->
@@ -501,7 +557,8 @@
 
         <!-- Directions: the single filled call to action, opens Google Maps -->
         <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.26 0.02" width="0.72" height="0.075" color="#a9f6ff" material="opacity: 0.8">
-          <a-text value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
+          <a-text id="txtDirections" value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
+          <a-image id="altDirections" width="0.72" height="0.075" position="0 0 0.002" visible="false"></a-image>
         </a-plane>
       </a-entity>
 
@@ -564,76 +621,129 @@
     // OPTIONAL: add   poster: "ooty/posters/ooty_lake.jpg"   to any place to show a still image on the
     // video panel before Play (16:9 works best; use a same-origin file or one served with CORS headers).
     // Without a poster the panel shows the video's first frame, which some phones leave blank until play.
+    //
+    // min / km replace the old `time` text so each language can format them itself ("13 min (2.4 km)" in
+    // English gives exactly the same text as before). i18n holds each place's full title and short card name.
+    // The Tamil and Hindi wording is a first draft: please have a native speaker check it.
     const PLACES = {
       ooty_lake: {
-        lat: 11.403, lng: 76.6875,
-        title: "Ooty Lake & Boathouse",
-        time: "13 min (2.4 km)",
+        lat: 11.403, lng: 76.6875, min: 13, km: 2.4,
         video: "ooty/Ooty_Lake.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse",
+        i18n: {
+          en: { title: "Ooty Lake & Boathouse", short: "Ooty Lake" },
+          ta: { title: "ஊட்டி ஏரி மற்றும் படகு இல்லம்", short: "ஊட்டி ஏரி" },
+          hi: { title: "ऊटी झील और बोट हाउस", short: "ऊटी झील" }
+        }
       },
       pykara: {
-        lat: 11.465, lng: 76.595,
-        title: "Pykara Waterfalls & Lake",
-        time: "55 min (21 km)",
+        lat: 11.465, lng: 76.595, min: 55, km: 21,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls",
+        i18n: {
+          en: { title: "Pykara Waterfalls & Lake", short: "Pykara Lake" },
+          ta: { title: "பைக்காரா நீர்வீழ்ச்சி மற்றும் ஏரி", short: "பைக்காரா ஏரி" },
+          hi: { title: "पायकारा जलप्रपात और झील", short: "पायकारा झील" }
+        }
       },
       rose_garden: {
-        lat: 11.4114, lng: 76.7053,
-        title: "Government Rose Garden",
-        time: "4 min (0.6 km)",
+        lat: 11.4114, lng: 76.7053, min: 4, km: 0.6,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Rose Garden", short: "Rose Garden" },
+          ta: { title: "அரசு ரோஜா தோட்டம்", short: "ரோஜா தோட்டம்" },
+          hi: { title: "सरकारी गुलाब उद्यान", short: "गुलाब उद्यान" }
+        }
       },
       botanical_garden: {
-        lat: 11.4187, lng: 76.7112,
-        title: "Government Botanical Garden",
-        time: "5 min (0.8 km)",
+        lat: 11.4187, lng: 76.7112, min: 5, km: 0.8,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Botanical Garden", short: "Botanical Garden" },
+          ta: { title: "அரசு தாவரவியல் பூங்கா", short: "தாவரவியல் பூங்கா" },
+          hi: { title: "सरकारी वनस्पति उद्यान", short: "वनस्पति उद्यान" }
+        }
       },
       murugan_temple: {
-        lat: 11.4096, lng: 76.6868,
-        title: "Elk Hill Murugan Temple",
-        time: "8 min (1.4 km)",
+        lat: 11.4096, lng: 76.6868, min: 8, km: 1.4,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty",
+        i18n: {
+          en: { title: "Elk Hill Murugan Temple", short: "Murugan Temple" },
+          ta: { title: "எல்க் ஹில் முருகன் கோயில்", short: "முருகன் கோயில்" },
+          hi: { title: "एल्क हिल मुरुगन मंदिर", short: "मुरुगन मंदिर" }
+        }
       },
       govt_museum: {
-        lat: 11.4171, lng: 76.7101,
-        title: "Government Museum Ooty",
-        time: "4 min (0.7 km)",
+        lat: 11.4171, lng: 76.7101, min: 4, km: 0.7,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty",
+        i18n: {
+          en: { title: "Government Museum Ooty", short: "Govt Museum" },
+          ta: { title: "அரசு அருங்காட்சியகம், ஊட்டி", short: "அரசு அருங்காட்சியகம்" },
+          hi: { title: "सरकारी संग्रहालय, ऊटी", short: "सरकारी संग्रहालय" }
+        }
       },
       doddabetta: {
-        lat: 11.4, lng: 76.7357,
-        title: "Doddabetta Peak Observatory",
-        time: "35 min (9.5 km)",
+        lat: 11.4, lng: 76.7357, min: 35, km: 9.5,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak",
+        i18n: {
+          en: { title: "Doddabetta Peak Observatory", short: "Doddabetta Peak" },
+          ta: { title: "தொட்டபெட்டா சிகரம் காட்சி முனை", short: "தொட்டபெட்டா சிகரம்" },
+          hi: { title: "दोदाबेट्टा शिखर वेधशाला", short: "दोदाबेट्टा शिखर" }
+        }
       },
       pine_forest: {
-        lat: 11.4361, lng: 76.6752,
-        title: "Pine Forest (Shooting Spot)",
-        time: "35 min (10 km)",
+        lat: 11.4361, lng: 76.6752, min: 35, km: 10,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty",
+        i18n: {
+          en: { title: "Pine Forest (Shooting Spot)", short: "Pine Forest" },
+          ta: { title: "பைன் காடு (படப்பிடிப்பு இடம்)", short: "பைன் காடு" },
+          hi: { title: "पाइन वन (शूटिंग स्थल)", short: "पाइन वन" }
+        }
       },
       avalanche: {
-        lat: 11.2761, lng: 76.5583,
-        title: "Avalanche Lake Checkpoint",
-        time: "1 hr 15 min (25 km)",
+        lat: 11.2761, lng: 76.5583, min: 75, km: 25,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty",
+        i18n: {
+          en: { title: "Avalanche Lake Checkpoint", short: "Avalanche Lake" },
+          ta: { title: "அவலாஞ்சி ஏரி சோதனைச் சாவடி", short: "அவலாஞ்சி ஏரி" },
+          hi: { title: "अवलांच झील चौकी", short: "अवलांच झील" }
+        }
       },
       mudumalai: {
-        lat: 11.5675, lng: 76.533,
-        title: "Mudumalai Tiger Reserve",
-        time: "1 hr 20 min (37 km)",
+        lat: 11.5675, lng: 76.533, min: 80, km: 37,
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        maps: "https://www.google.com/maps/dir/?api=1&destination=Mudumalai+National+Park"
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Mudumalai+National+Park",
+        i18n: {
+          en: { title: "Mudumalai Tiger Reserve", short: "Mudumalai Park" },
+          ta: { title: "முதுமலை புலிகள் காப்பகம்", short: "முதுமலை பூங்கா" },
+          hi: { title: "मुदुमलई बाघ अभयारण्य", short: "मुदुमलई उद्यान" }
+        }
+      }
+    };
+
+    // Interface wording per language (draft translations for Tamil and Hindi: please have them checked)
+    const UI = {
+      en: {
+        scanPoint: 'Point camera at the Ooty card', scanLocked: 'Target locked \u2014 tap a landmark',
+        directions: 'Directions', close: 'Close', driveTime: 'Drive time', fromYou: 'From you',
+        straight: 'straight line', min: 'min', hr: 'hr', km: 'km', boot: 'Calibrating AR interface\u2026'
+      },
+      ta: {
+        scanPoint: 'ஊட்டி அட்டையை கேமராவில் காட்டுங்கள்', scanLocked: 'அட்டை கிடைத்தது \u2014 ஓர் இடத்தைத் தொடவும்',
+        directions: 'வழிகள்', close: 'மூடு', driveTime: 'பயண நேரம்', fromYou: 'உங்கள் இடத்திலிருந்து',
+        straight: 'நேர்கோட்டில்', min: 'நிமிடம்', hr: 'மணி', km: 'கி.மீ', boot: 'AR திரையைத் தயார் செய்கிறது\u2026'
+      },
+      hi: {
+        scanPoint: 'कैमरे को ऊटी कार्ड की ओर करें', scanLocked: 'कार्ड मिल गया \u2014 किसी स्थान पर टैप करें',
+        directions: 'दिशा-निर्देश', close: 'बंद करें', driveTime: 'ड्राइव का समय', fromYou: 'आपके स्थान से',
+        straight: 'सीधी रेखा में', min: 'मिनट', hr: 'घंटा', km: 'किमी', boot: 'AR इंटरफ़ेस तैयार हो रहा है\u2026'
       }
     };
 
@@ -719,11 +829,34 @@
     const infoTime = document.getElementById('info-time');
     const mapsLink = document.getElementById('mapsLink');
     const bootLoader = document.getElementById('boot-loader');
+    const bootText = document.getElementById('bootText');
+    const mapsLabel = document.getElementById('mapsLabel');
+    const dockCloseBtn = document.querySelector('.btn-close');
+    const txtDirections = document.getElementById('txtDirections');
+    const altTitle = document.getElementById('altTitle');
+    const altDistance = document.getElementById('altDistance');
+    const altDirections = document.getElementById('altDirections');
+    const langButtons = Array.prototype.slice.call(document.querySelectorAll('#lang-toggle button[data-lang]'));
 
     const sceneEl = document.querySelector('a-scene');
 
     // Maps URL for the landmark that is currently open (used by the AR Directions button)
     let currentMapsUrl = '';
+
+    // ---- Language state (English unless the guest has chosen another language before) ----
+    function savedLang() {
+      try {
+        const s = localStorage.getItem('ooty-lang');
+        if (s && UI[s]) return s;
+      } catch (e) { /* storage unavailable: use English */ }
+      return 'en';
+    }
+
+    let LANG = savedLang();
+    let currentId = null;                 // landmark that is open, or null
+    let distState = { kind: 'fixed' };    // fixed value, live route, or straight-line fallback
+    let tracking = false;                 // whether the card is currently tracked
+    let langApplied = false;              // false until setLanguage() has run once
 
     // Build the icon badges once the scene's entities exist
     if (sceneEl.hasLoaded) {
@@ -795,12 +928,26 @@
       }
     }
 
-    function formatKm(km) { return km < 10 ? km.toFixed(1) : String(Math.round(km)); }
+    // ---- Language helpers (in English these give exactly the same text as before) ----
+    function ui(key) { return (UI[LANG] || UI.en)[key]; }
+    function pt(p, key) { return (p.i18n[LANG] || p.i18n.en)[key]; }
 
-    function formatDuration(min) {
-      if (min < 60) return min + ' min';
+    function fmtDuration(min) {
+      if (min < 60) return min + ' ' + ui('min');
       const h = Math.floor(min / 60), m = min % 60;
-      return h + ' hr' + (m ? ' ' + m + ' min' : '');
+      return h + ' ' + ui('hr') + (m ? ' ' + m + ' ' + ui('min') : '');
+    }
+
+    function fmtKm(km) {
+      return (km < 10 ? km.toFixed(1) : String(Math.round(km))) + ' ' + ui('km');
+    }
+
+    function distanceText() {
+      const p = PLACES[currentId];
+      if (!p) return '';
+      if (distState.kind === 'live') return ui('fromYou') + ' \u00B7 ' + fmtDuration(distState.min) + ' (' + fmtKm(distState.km) + ')';
+      if (distState.kind === 'line') return ui('fromYou') + ' \u00B7 ~' + fmtKm(distState.km) + ' ' + ui('straight');
+      return ui('driveTime') + ' \u00B7 ' + fmtDuration(p.min) + ' (' + fmtKm(p.km) + ')';
     }
 
     // ---- Distance pill: a capsule built from one plane and two end circles, sized to fit its text ----
@@ -817,6 +964,7 @@
       pillL.setAttribute('position', r.toFixed(3) + ' 0 0');
       pillR.setAttribute('position', (pw - r).toFixed(3) + ' 0 0');
       arDistanceTab.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0.002');
+      altDistance.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0.003');
     }
 
     // Measure the rendered text (two frames later, once the text geometry has updated) and size the pill to it.
@@ -835,11 +983,159 @@
       }));
     }
 
-    function setDistanceLabel(text) {
+    // ================= TAMIL / HINDI AR TEXT =================
+    // a-text cannot shape Tamil or Devanagari. In those languages the AR text is drawn by the browser onto a
+    // canvas and shown on an <a-image>; in English the original a-text is used, exactly as before.
+    const TEX_PPU = 2000;   // canvas pixels per world unit
+
+    function fontFor(kind) {
+      if (LANG === 'ta') return "'Noto Sans Tamil', sans-serif";
+      if (LANG === 'hi') return "'Noto Sans Devanagari', sans-serif";
+      return kind === 'head' ? "'Orbitron', sans-serif" : "'Rajdhani', sans-serif";
+    }
+
+    function loadFont(family, weight, text) {
+      if (!document.fonts || !document.fonts.load) return Promise.resolve();
+      return document.fonts.load(weight + ' 40px ' + family, text).catch(() => {});
+    }
+
+    // o: { text, kind: 'head'|'body', color, size (fraction of line height), pad (world units per side), align }
+    // Resolves to the drawn text width in world units, or null if a newer render replaced this one.
+    async function renderLabel(el, o) {
+      const rid = (el._rid = (el._rid || 0) + 1);
+      const W = parseFloat(el.getAttribute('width'));
+      const H = parseFloat(el.getAttribute('height'));
+      const cw = Math.max(8, Math.round(W * TEX_PPU));
+      const ch = Math.max(8, Math.round(H * TEX_PPU));
+      const lines = String(o.text).split('\n');
+      const family = fontFor(o.kind);
+      const weight = o.kind === 'head' ? 600 : 700;
+
+      await loadFont(family, weight, o.text);
+      if (rid !== el._rid) return null;
+
+      const cv = document.createElement('canvas');
+      cv.width = cw;
+      cv.height = ch;
+      const ctx = cv.getContext('2d');
+      const slot = ch / lines.length;
+      const padPx = (o.pad == null ? 0.02 : o.pad) * TEX_PPU;
+      const maxW = cw - 2 * padPx;
+
+      const widest = p => {
+        ctx.font = weight + ' ' + p + 'px ' + family;
+        return Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
+      };
+
+      let px = slot * (o.size || 0.6);
+      let tw = widest(px);
+      while (tw > maxW && px > 10) { px *= 0.94; tw = widest(px); }
+
+      ctx.font = weight + ' ' + px + 'px ' + family;
+      ctx.fillStyle = o.color;
+      ctx.textBaseline = 'middle';
+      let tx;
+      if (o.align === 'left') { ctx.textAlign = 'left'; tx = padPx; }
+      else { ctx.textAlign = 'center'; tx = cw / 2; }
+      lines.forEach((l, i) => ctx.fillText(l, tx, slot * (i + 0.5) + px * 0.04));
+
+      el.setAttribute('src', cv.toDataURL('image/png'));
+      el.setAttribute('visible', 'true');
+      return tw / TEX_PPU;
+    }
+
+    // Show one piece of AR text: the a-text in English, the canvas picture in Tamil / Hindi.
+    function showText(textEl, imgEl, enValue, opts) {
+      if (LANG === 'en') {
+        imgEl._rid = (imgEl._rid || 0) + 1;      // cancel any render still in flight
+        imgEl.setAttribute('visible', 'false');
+        textEl.setAttribute('visible', 'true');
+        textEl.setAttribute('value', enValue);
+        return Promise.resolve(null);
+      }
+      textEl.setAttribute('visible', 'false');
+      return renderLabel(imgEl, opts);
+    }
+
+    // Draws the distance line: AR pill (sized to its text) and the dock
+    function renderDistance() {
+      const text = distanceText();
       pillText = text;
-      arDistanceTab.setAttribute('value', text);
       infoTime.innerText = text;
-      fitPill();
+      if (LANG === 'en') {
+        showText(arDistanceTab, altDistance, text, null);
+        fitPill();
+      } else {
+        arDistanceTab.setAttribute('visible', 'false');
+        renderLabel(altDistance, { text: text, kind: 'body', color: '#33e6ff', size: 0.62, pad: PILL_PAD / 2 }).then(w => {
+          if (w) applyPill(Math.min(PILL_MAX_W, Math.max(PILL_MIN_W, w + PILL_PAD)));
+        });
+      }
+    }
+
+    // Title (AR header and dock) plus distance for the open landmark
+    function renderPlace() {
+      const p = PLACES[currentId];
+      if (!p) return;
+      const title = pt(p, 'title');
+      showText(arTitle, altTitle, title, { text: title, kind: 'head', color: '#a9f6ff', size: 0.5, pad: 0, align: 'left' });
+      infoTitle.innerText = title;
+      renderDistance();
+    }
+
+    function renderHotspotLabels() {
+      document.querySelectorAll('.spot-btn').forEach(btn => {
+        const p = PLACES[btn.getAttribute('data-id')];
+        const txt = btn.querySelector('a-text');
+        const alt = btn.querySelector('.hs-alt');
+        if (!p || !txt || !alt) return;
+        const label = pt(p, 'short') + '\n(' + fmtDuration(p.min) + ')';
+        showText(txt, alt, label, { text: label, kind: 'body', color: '#a9f6ff', size: 0.68, pad: 0.05 });
+      });
+    }
+
+    function renderDirectionsLabel() {
+      const t = LANG === 'en' ? 'DIRECTIONS' : ui('directions');
+      showText(txtDirections, altDirections, t, { text: t, kind: 'body', color: '#030507', size: 0.62, pad: 0.03 });
+    }
+
+    // Each hotspot gets a hidden <a-image> beside its a-text, used only in Tamil / Hindi
+    function initHotspotAlts() {
+      document.querySelectorAll('.spot-btn').forEach(btn => {
+        const alt = document.createElement('a-image');
+        alt.classList.add('hs-alt');
+        alt.setAttribute('width', btn.getAttribute('width'));
+        alt.setAttribute('height', btn.getAttribute('height'));
+        alt.setAttribute('position', '0 0 0.002');
+        alt.setAttribute('visible', 'false');
+        btn.appendChild(alt);
+      });
+    }
+
+    function updateScanText() {
+      scanPromptText.innerText = tracking ? ui('scanLocked') : ui('scanPoint');
+    }
+
+    function setLanguage(lang) {
+      if (!UI[lang]) lang = 'en';
+      const firstRun = !langApplied;
+      langApplied = true;
+      LANG = lang;
+      try { localStorage.setItem('ooty-lang', lang); } catch (e) { /* ignore */ }
+      document.documentElement.lang = lang;
+      langButtons.forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)));
+
+      bootText.textContent = ui('boot');
+      mapsLabel.textContent = ui('directions');
+      dockCloseBtn.setAttribute('aria-label', ui('close'));
+      updateScanText();
+
+      // On the very first run in English the AR text is already correct, so leave it alone
+      if (!(firstRun && lang === 'en')) {
+        renderHotspotLabels();
+        renderDirectionsLabel();
+      }
+      if (currentId) renderPlace();
     }
 
     // Shows the fixed value first (set in the click handler), then swaps in the live one
@@ -852,15 +1148,16 @@
       if (!from || reqId !== liveRequestId) return; // denied, failed, or user moved on
 
       const to = { lat: data.lat, lng: data.lng };
-      let label;
+      let next;
       try {
         const r = await fetchRoute(from, to);
-        label = 'From you \u00B7 ' + formatDuration(r.min) + ' (' + formatKm(r.km) + ' km)';
+        next = { kind: 'live', min: r.min, km: r.km };
       } catch (e) {
-        label = 'From you \u00B7 ~' + formatKm(haversineKm(from, to)) + ' km straight line';
+        next = { kind: 'line', km: haversineKm(from, to) };
       }
       if (reqId !== liveRequestId) return;
-      setDistanceLabel(label);
+      distState = next;
+      renderDistance();
     }
 
     // Attach click listeners to landmark buttons
@@ -883,8 +1180,9 @@
         updateProgress();
         syncPlayer();
 
-        arTitle.setAttribute('value', data.title);
-        setDistanceLabel('Drive time \u00B7 ' + data.time);
+        currentId = id;
+        distState = { kind: 'fixed' };
+        renderPlace();
         screenGroup.setAttribute('visible', 'true');
         screenGroup.removeAttribute('animation__show');
         screenGroup.setAttribute('animation__show', {
@@ -897,8 +1195,6 @@
 
         currentMapsUrl = data.maps;
 
-        infoTitle.innerText = data.title;
-        infoTime.innerText = "Drive time \u00B7 " + data.time;
         mapsLink.href = data.maps;
         bottomBar.classList.add('active');
         document.body.classList.add('spot-open');
@@ -989,6 +1285,7 @@
       document.body.classList.remove('spot-open');
       hasStarted = false;
       syncPlayer();
+      currentId = null;
     }
 
     document.getElementById('arCloseBtn').addEventListener('click', () => {
@@ -1002,17 +1299,26 @@
     const scanPromptText = document.getElementById('scanPromptText');
 
     cardTarget.addEventListener("targetFound", () => {
-      scanPromptText.innerText = "Target locked \u2014 tap a landmark";
+      tracking = true;
+      updateScanText();
       scanPrompt.classList.remove('locked');
       void scanPrompt.offsetWidth;
       scanPrompt.classList.add('locked');
     });
 
     cardTarget.addEventListener("targetLost", () => {
-      scanPromptText.innerText = "Point camera at the Ooty card";
+      tracking = false;
+      updateScanText();
       scanPrompt.classList.remove('locked');
       videoEl.pause();
     });
+
+    // Language toggle wiring, then start in the saved language (English by default)
+    langButtons.forEach(b => {
+      b.addEventListener('click', () => setLanguage(b.getAttribute('data-lang')));
+    });
+    initHotspotAlts();
+    setLanguage(LANG);
   </script>
 </body>
 </html>
