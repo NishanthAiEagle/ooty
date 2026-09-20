@@ -183,74 +183,6 @@
       opacity: 0;
     }
 
-    /* Screen fallback dock for Maps navigation — HUD target-lock panel */
-    #active-info-bar {
-      position: fixed;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* clears the browser toolbar */
-      left: 16px;
-      right: 16px;
-      max-width: 420px;
-      margin: 0 auto;
-      background: rgba(9,17,27,0.5);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(51,230,255,0.55);
-      border-radius: 4px;
-      padding: 14px 16px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 12px;
-      pointer-events: none;
-      box-shadow: 0 12px 34px rgba(0,0,0,0.6), 0 0 22px rgba(51,230,255,0.12);
-      opacity: 0;
-      transform: translateY(60px) scale(0.96);
-      transition: transform 0.45s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
-    }
-
-    #active-info-bar.active {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      pointer-events: auto;
-    }
-
-    /* Targeting-reticle corner brackets on the lock panel */
-    .corner {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      border: 1.5px solid var(--cyan);
-      opacity: 0.85;
-    }
-    .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-    .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
-    .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
-    .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
-
-    .info-text { flex: 1; min-width: 0; order: 1; }
-
-    #info-title {
-      color: var(--ice);
-      font-family: 'Orbitron', sans-serif;
-      font-weight: 600;
-      font-size: 13.5px;
-      letter-spacing: 0.3px;
-      line-height: 1.3;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #info-time {
-      margin-top: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.4px;
-      color: var(--cyan-soft);
-    }
-
-    .dock-divider { display: none; }
-
     /* Language toggle, under the scan pill. Always visible; 40px-high tap targets. */
     #lang-toggle {
       display: flex;
@@ -285,17 +217,10 @@
     /* Tamil and Hindi only: use the Noto faces, drop letter-spacing (it breaks letter joining),
        and let long dock titles wrap to two lines. English styling is untouched. */
     html[lang="ta"] body *, html[lang="hi"] body * { letter-spacing: normal !important; }
-    html[lang="ta"] .scan-pill, html[lang="ta"] #info-title, html[lang="ta"] #info-time,
+    html[lang="ta"] .scan-pill,
     html[lang="ta"] #boot-loader span, html[lang="ta"] #lang-toggle button { font-family: 'Noto Sans Tamil', sans-serif; }
-    html[lang="hi"] .scan-pill, html[lang="hi"] #info-title, html[lang="hi"] #info-time,
+    html[lang="hi"] .scan-pill,
     html[lang="hi"] #boot-loader span, html[lang="hi"] #lang-toggle button { font-family: 'Noto Sans Devanagari', sans-serif; }
-    html[lang="ta"] #info-title, html[lang="hi"] #info-title {
-      white-space: normal;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      line-height: 1.5;
-    }
 
     /* Boot loader — radar sweep instead of a generic spinner */
     #boot-loader {
@@ -396,17 +321,6 @@
       <button type="button" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button>
     </div>
 
-    <!-- Screen Navigation Dock (title/time + close button) -->
-    <div id="active-info-bar">
-      <span class="corner corner-tl"></span>
-      <span class="corner corner-tr"></span>
-      <span class="corner corner-bl"></span>
-      <span class="corner corner-br"></span>
-      <div class="info-text">
-        <div id="info-title">Location Name</div>
-        <div id="info-time">Drive time &middot; --</div>
-      </div>
-    </div>
   </div>
 
   <!-- MindAR Scene -->
@@ -765,9 +679,6 @@
     const arProgress = document.getElementById('arProgress');
     const progFill = document.getElementById('arProgFill');
     const arDirectionsBtn = document.getElementById('arDirectionsBtn');
-    const bottomBar = document.getElementById('active-info-bar');
-    const infoTitle = document.getElementById('info-title');
-    const infoTime = document.getElementById('info-time');
     const bootLoader = document.getElementById('boot-loader');
     const bootText = document.getElementById('bootText');
     const txtDirections = document.getElementById('txtDirections');
@@ -995,11 +906,10 @@
       return renderLabel(imgEl, opts);
     }
 
-    // Draws the distance line: AR pill (sized to its text) and the dock
+    // Draws the distance line: the AR pill (sized to its text)
     function renderDistance() {
       const text = distanceText();
       pillText = text;
-      infoTime.innerText = text;
       if (LANG === 'en') {
         showText(arDistanceTab, altDistance, text, null);
         fitPill();
@@ -1011,13 +921,12 @@
       }
     }
 
-    // Title (AR header and dock) plus distance for the open landmark
+    // Title (AR header) plus distance for the open landmark
     function renderPlace() {
       const p = PLACES[currentId];
       if (!p) return;
       const title = pt(p, 'title');
       showText(arTitle, altTitle, title, { text: title, kind: 'head', color: '#a9f6ff', size: 0.5, pad: 0, align: 'left' });
-      infoTitle.innerText = title;
       renderDistance();
     }
 
@@ -1131,7 +1040,6 @@
 
         currentMapsUrl = data.maps;
 
-        bottomBar.classList.add('active');
         document.body.classList.add('spot-open');
 
         updateLiveDistance(id);
@@ -1216,7 +1124,6 @@
       });
       setTimeout(() => screenGroup.setAttribute('visible', 'false'), 220);
 
-      bottomBar.classList.remove('active');
       document.body.classList.remove('spot-open');
       hasStarted = false;
       syncPlayer();
