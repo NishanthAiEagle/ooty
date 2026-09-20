@@ -417,7 +417,7 @@
 
   <!-- MindAR Scene -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets/card.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    mindar-image="imageTargetSrc: ./targets/targets.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights"
     vr-mode-ui="enabled: false"
@@ -441,42 +441,66 @@
     <!-- Target Entity -->
     <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
 
-      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless HUD panel) ================= -->
+      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless HUD panel) =================
+           Layout, top to bottom:
+             header     title (left), close icon (corner), distance pill (under the title)
+             video      poster before play, round play button, progress bar while playing
+             directions one full-width button
+           Everything is drawn from planes, circles and triangles, so no text glyphs are needed for icons. -->
       <a-entity id="videoScreenGroup" position="0 0.65 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
 
-        <!-- Glass backing plate (extended to cover the Directions row) -->
-        <a-plane position="0 -0.0935 -0.012" width="0.74" height="0.715" color="#0a1420" material="opacity: 0.35; roughness: 0.9; metalness: 0.3"></a-plane>
+        <!-- Glass backing plate (covers header, video and the Directions row) -->
+        <a-plane position="0 0.0025 -0.012" width="0.74" height="0.64" color="#0a1420" material="opacity: 0.35; roughness: 0.9; metalness: 0.3"></a-plane>
 
         <!-- Thin cyan edge -->
-        <a-plane position="0 -0.0935 -0.013" width="0.744" height="0.719" color="#33e6ff" material="opacity: 0.6"></a-plane>
+        <a-plane position="0 0.0025 -0.013" width="0.744" height="0.644" color="#33e6ff" material="opacity: 0.6"></a-plane>
 
-        <!-- Video Surface, flush edge-to-edge -->
-        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
+        <!-- Video surface, flush edge-to-edge. Tapping anywhere on it toggles play / pause. -->
+        <a-video id="videoPlane" class="clickable" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
 
-        <!-- Header Banner -->
-        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#0c1a2a" material="opacity: 0.6">
-          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#a9f6ff" width="1.0" baseline="center"></a-text>
-        </a-plane>
+        <!-- Poster still, shown before the first play when a place has a `poster` image (see PLACES) -->
+        <a-image id="arPoster" position="0 0 0.006" width="0.72" height="0.405" visible="false"></a-image>
+
+        <!-- Header: title on the left, distance pill underneath, close icon in the top-right corner -->
+        <a-plane position="0 0.2625 0.01" width="0.72" height="0.12" color="#0c1a2a" material="opacity: 0.6"></a-plane>
         <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.85"></a-plane>
+        <a-text id="arVideoTitle" value="LOCATION TITLE" align="left" anchor="left" baseline="center" color="#a9f6ff" width="1.0" position="-0.335 0.2925 0.012"></a-text>
 
-        <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
-        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#33e6ff" material="opacity: 0.8"
-                 animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
-          <a-text id="playPauseText" value="&#9654; PLAY VIDEO" align="center" color="#030507" width="1.1"></a-text>
+        <!-- Distance pill: one plane plus two end circles, resized to fit its text by fitPill() -->
+        <a-entity id="arDistPill" position="-0.335 0.2345 0.012">
+          <a-plane id="pillBody" position="0.2 0 0" width="0.362" height="0.038" color="#123047"></a-plane>
+          <a-circle id="pillL" position="0.019 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
+          <a-circle id="pillR" position="0.381 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
+          <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" baseline="center" color="#33e6ff" width="0.9" position="0.2 0 0.002"></a-text>
+        </a-entity>
+
+        <!-- Close: small icon with a larger invisible tap area around it -->
+        <a-plane id="arCloseBtn" class="clickable" position="0.305 0.2625 0.02" width="0.11" height="0.11" material="opacity: 0; transparent: true; depthWrite: false">
+          <a-circle radius="0.03" segments="24" color="#ff4f81" material="opacity: 0.9" position="0 0 0.001"></a-circle>
+          <a-plane width="0.034" height="0.006" color="#030507" position="0 0 0.002" rotation="0 0 45"></a-plane>
+          <a-plane width="0.034" height="0.006" color="#030507" position="0 0 0.002" rotation="0 0 -45"></a-plane>
         </a-plane>
 
-        <!-- Close Button -->
-        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#ff4f81" material="opacity: 0.8">
-          <a-text value="&#10005; CLOSE" align="center" color="#030507" width="1.05"></a-text>
-        </a-plane>
+        <!-- Big round play button, centred on the video (hidden while playing) -->
+        <a-circle id="arBigPlay" class="clickable" position="0 0 0.02" radius="0.07" segments="32" color="#33e6ff" material="opacity: 0.92"
+                  animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
+          <a-triangle vertex-a="-0.022 0.034 0" vertex-b="-0.022 -0.034 0" vertex-c="0.038 0 0" color="#030507" position="0 0 0.002"></a-triangle>
+        </a-circle>
 
-        <!-- Distance Tab — sits right below the Play/Close row -->
-        <a-plane id="arDistanceTabBg" position="0 -0.3275 0.01" width="0.72" height="0.055" color="#0c1a2a" material="opacity: 0.6">
-          <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" color="#33e6ff" width="1.35" baseline="center"></a-text>
-        </a-plane>
+        <!-- Small pause button, bottom-left of the video (shown while playing) -->
+        <a-circle id="arMiniPause" class="clickable" position="-0.315 -0.15 0.02" radius="0.03" segments="24" color="#030507" material="opacity: 0.65" visible="false">
+          <a-plane width="0.008" height="0.028" color="#a9f6ff" position="-0.009 0 0.002"></a-plane>
+          <a-plane width="0.008" height="0.028" color="#a9f6ff" position="0.009 0 0.002"></a-plane>
+        </a-circle>
 
-        <!-- Directions Button — full-width third row, opens Google Maps -->
-        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.405 0.02" width="0.72" height="0.06" color="#a9f6ff" material="opacity: 0.8">
+        <!-- Progress bar along the bottom of the video (shown once the video has started) -->
+        <a-entity id="arProgress" visible="false">
+          <a-plane position="0 -0.19 0.014" width="0.68" height="0.008" color="#ffffff" material="opacity: 0.3"></a-plane>
+          <a-plane id="arProgFill" position="-0.34 -0.19 0.015" width="0.0001" height="0.008" color="#33e6ff"></a-plane>
+        </a-entity>
+
+        <!-- Directions: the single filled call to action, opens Google Maps -->
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.26 0.02" width="0.72" height="0.075" color="#a9f6ff" material="opacity: 0.8">
           <a-text value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
         </a-plane>
       </a-entity>
@@ -537,6 +561,9 @@
 
   <script>
     // NOTE: lat/lng are APPROXIMATE. Right-click each spot in Google Maps and paste the exact values.
+    // OPTIONAL: add   poster: "ooty/posters/ooty_lake.jpg"   to any place to show a still image on the
+    // video panel before Play (16:9 works best; use a same-origin file or one served with CORS headers).
+    // Without a poster the panel shows the video's first frame, which some phones leave blank until play.
     const PLACES = {
       ooty_lake: {
         lat: 11.403, lng: 76.6875,
@@ -677,8 +704,15 @@
     const screenGroup = document.getElementById('videoScreenGroup');
     const arTitle = document.getElementById('arVideoTitle');
     const arDistanceTab = document.getElementById('arDistanceTab');
-    const playPauseBtn = document.getElementById('arPlayPauseBtn');
-    const playPauseText = document.getElementById('playPauseText');
+    const pillBody = document.getElementById('pillBody');
+    const pillL = document.getElementById('pillL');
+    const pillR = document.getElementById('pillR');
+    const videoPlane = document.getElementById('videoPlane');
+    const arPoster = document.getElementById('arPoster');
+    const bigPlay = document.getElementById('arBigPlay');
+    const miniPause = document.getElementById('arMiniPause');
+    const arProgress = document.getElementById('arProgress');
+    const progFill = document.getElementById('arProgFill');
     const arDirectionsBtn = document.getElementById('arDirectionsBtn');
     const bottomBar = document.getElementById('active-info-bar');
     const infoTitle = document.getElementById('info-title');
@@ -769,9 +803,43 @@
       return h + ' hr' + (m ? ' ' + m + ' min' : '');
     }
 
+    // ---- Distance pill: a capsule built from one plane and two end circles, sized to fit its text ----
+    const PILL_H = 0.038;        // pill height, in panel units
+    const PILL_MIN_W = 0.2;
+    const PILL_MAX_W = 0.56;     // stays clear of the close icon in the header corner
+    const PILL_PAD = 0.07;       // total horizontal padding around the text
+    let pillText = 'Drive time \u00B7 --';
+
+    function applyPill(pw) {
+      const r = PILL_H / 2;
+      pillBody.setAttribute('width', Math.max(0.001, pw - PILL_H).toFixed(3));
+      pillBody.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0');
+      pillL.setAttribute('position', r.toFixed(3) + ' 0 0');
+      pillR.setAttribute('position', (pw - r).toFixed(3) + ' 0 0');
+      arDistanceTab.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0.002');
+    }
+
+    // Measure the rendered text (two frames later, once the text geometry has updated) and size the pill to it.
+    // If the measurement isn't available, fall back to an estimate based on the number of characters.
+    function fitPill() {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        let w = 0;
+        try {
+          const mesh = arDistanceTab.getObject3D('text');
+          if (mesh && mesh.geometry && mesh.geometry.layout) {
+            w = mesh.geometry.layout.width * Math.abs(mesh.scale.x);
+          }
+        } catch (e) { /* fall through to the estimate */ }
+        if (!w || !isFinite(w)) w = pillText.length * 0.015;
+        applyPill(Math.min(PILL_MAX_W, Math.max(PILL_MIN_W, w + PILL_PAD)));
+      }));
+    }
+
     function setDistanceLabel(text) {
+      pillText = text;
       arDistanceTab.setAttribute('value', text);
       infoTime.innerText = text;
+      fitPill();
     }
 
     // Shows the fixed value first (set in the click handler), then swaps in the live one
@@ -804,16 +872,19 @@
 
         popFeedback(btn);
 
+        // New place: reset the player. "#t=0.1" asks the browser to show a frame near the start while paused.
         videoEl.pause();
-        videoEl.src = data.video;
+        hasStarted = false;
+        videoEl.src = data.video + (data.video.indexOf('#') === -1 ? '#t=0.1' : '');
         videoEl.load();
 
-        playPauseBtn.setAttribute('color', '#33e6ff');
-        playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
-        playPauseText.setAttribute('color', '#030507');
+        posterOn = !!data.poster;
+        if (data.poster) arPoster.setAttribute('src', data.poster);
+        updateProgress();
+        syncPlayer();
 
         arTitle.setAttribute('value', data.title);
-        arDistanceTab.setAttribute('value', 'Drive time \u00B7 ' + data.time);
+        setDistanceLabel('Drive time \u00B7 ' + data.time);
         screenGroup.setAttribute('visible', 'true');
         screenGroup.removeAttribute('animation__show');
         screenGroup.setAttribute('animation__show', {
@@ -836,29 +907,63 @@
       });
     });
 
-    // AR Play / Pause Toggle Button Handler
-    playPauseBtn.addEventListener('click', () => {
-      popFeedback(playPauseBtn);
+    // ---- Player UI: poster, round play button, small pause button, progress bar ----
+    let hasStarted = false;   // true once the current video has been played at least once
+    let posterOn = false;     // true when the current place supplies a poster image
+    const PROG_W = 0.68;      // full width of the progress bar
+    const PROG_X0 = -0.34;    // x position of its left end
+
+    function updateProgress() {
+      const d = videoEl.duration;
+      const f = (d && isFinite(d)) ? Math.min(1, videoEl.currentTime / d) : 0;
+      const w = Math.max(0.0001, PROG_W * f);
+      progFill.setAttribute('width', w.toFixed(4));
+      progFill.setAttribute('position', (PROG_X0 + w / 2).toFixed(4) + ' -0.19 0.015');
+    }
+
+    // One place decides what is visible: big play when paused, small pause while playing,
+    // progress bar once started, poster only before the first play.
+    function syncPlayer() {
+      const playing = !videoEl.paused && !videoEl.ended;
+      bigPlay.setAttribute('visible', !playing);
+      miniPause.setAttribute('visible', playing);
+      arProgress.setAttribute('visible', hasStarted);
+      arPoster.setAttribute('visible', posterOn && !hasStarted);
+    }
+
+    function togglePlay(feedbackEl) {
+      if (feedbackEl) popFeedback(feedbackEl);
       if (videoEl.paused) {
         videoEl.muted = false;
-        videoEl.play().then(() => {
-          playPauseBtn.setAttribute('color', '#8c6bff');
-          playPauseText.setAttribute('value', '\u275A\u275A PAUSE');
-          playPauseText.setAttribute('color', '#eaf6ff');
-        }).catch(err => {
+        videoEl.play().catch(() => {
           videoEl.muted = true;
-          videoEl.play();
-          playPauseBtn.setAttribute('color', '#8c6bff');
-          playPauseText.setAttribute('value', '\u275A\u275A PAUSE');
-          playPauseText.setAttribute('color', '#eaf6ff');
+          videoEl.play().catch(() => {});
         });
       } else {
         videoEl.pause();
-        playPauseBtn.setAttribute('color', '#33e6ff');
-        playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
-        playPauseText.setAttribute('color', '#030507');
       }
-    });
+    }
+
+    videoEl.addEventListener('play', () => { hasStarted = true; syncPlayer(); });
+    videoEl.addEventListener('pause', syncPlayer);
+    videoEl.addEventListener('timeupdate', updateProgress);
+
+    // Tapping the round play button, the small pause button, or anywhere on the video toggles playback
+    bigPlay.addEventListener('click', () => togglePlay(bigPlay));
+    miniPause.addEventListener('click', () => togglePlay(miniPause));
+    videoPlane.addEventListener('click', () => togglePlay(null));
+
+    // Set the panel's starting layout once the scene's entities exist
+    function initPanel() {
+      applyPill(0.4);
+      updateProgress();
+      syncPlayer();
+    }
+    if (sceneEl.hasLoaded) {
+      initPanel();
+    } else {
+      sceneEl.addEventListener('loaded', initPanel);
+    }
 
     // AR Directions Button Handler — opens Google Maps for the open landmark
     arDirectionsBtn.addEventListener('click', () => {
@@ -882,9 +987,8 @@
 
       bottomBar.classList.remove('active');
       document.body.classList.remove('spot-open');
-      playPauseBtn.setAttribute('color', '#33e6ff');
-      playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
-      playPauseText.setAttribute('color', '#030507');
+      hasStarted = false;
+      syncPlayer();
     }
 
     document.getElementById('arCloseBtn').addEventListener('click', () => {
@@ -908,9 +1012,6 @@
       scanPromptText.innerText = "Point camera at the Ooty card";
       scanPrompt.classList.remove('locked');
       videoEl.pause();
-      playPauseBtn.setAttribute('color', '#33e6ff');
-      playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
-      playPauseText.setAttribute('color', '#030507');
     });
   </script>
 </body>
