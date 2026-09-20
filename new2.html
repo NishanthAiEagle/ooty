@@ -9,19 +9,22 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- HUD type pairing -->
+  <!-- HUD type pairing: an angular display face for labels, a condensed tech grotesk for body -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 
   <style>
     :root {
+      /* HUD palette: void navy, electric cyan primary, violet secondary, magenta alert */
       --void:        #05080f;
       --panel:       #0a1420;
+      --panel-2:     #0c1a2a;
       --cyan:        #33e6ff;
       --cyan-soft:   #a9f6ff;
       --cyan-dim:    #1c7f94;
       --violet:      #8c6bff;
+      --violet-soft: #c9bbff;
       --magenta:     #ff4f81;
       --ice:         #eaf6ff;
       --ink:         #030507;
@@ -37,8 +40,12 @@
       color: var(--ice);
     }
 
+    .hud-label { font-family: 'Orbitron', sans-serif; }
+
+    /* PREVENTS RAW HTML VIDEO FROM RENDERING ON SCREEN */
     video#arVideo {
       display: none !important;
+      visibility: hidden !important;
       position: absolute !important;
       top: -99999px !important;
       left: -99999px !important;
@@ -48,12 +55,14 @@
       pointer-events: none !important;
     }
 
+    /* Subtle scanline + vignette so UI reads over any camera background */
     #vignette {
       position: fixed;
       inset: 0;
       z-index: 9998;
       pointer-events: none;
-      background: linear-gradient(to bottom, rgba(2,6,12,0.6) 0%, rgba(2,6,12,0) 16%, rgba(2,6,12,0) 78%, rgba(2,6,12,0.65) 100%);
+      background:
+        linear-gradient(to bottom, rgba(2,6,12,0.6) 0%, rgba(2,6,12,0) 16%, rgba(2,6,12,0) 78%, rgba(2,6,12,0.65) 100%);
     }
 
     #scan-sweep {
@@ -79,6 +88,7 @@
       100% { top: 100%; }
     }
 
+    /* Screen UI Overlay */
     #ui-container {
       position: fixed;
       top: 0;
@@ -104,18 +114,25 @@
       display: inline-flex;
       align-items: center;
       gap: 9px;
-      background: rgba(10,20,32,0.75);
+      background: rgba(10,20,32,0.7);
       backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       border: 1px solid var(--cyan-dim);
       color: var(--cyan-soft);
       padding: 9px 20px 9px 16px;
       border-radius: 999px;
+      font-family: 'Rajdhani', sans-serif;
       font-size: 13px;
       font-weight: 600;
       letter-spacing: 0.6px;
       text-transform: uppercase;
+      box-shadow: 0 0 0 rgba(51,230,255,0);
+      transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
       animation: pillBreathe 2.4s ease-in-out infinite;
     }
+
+    .scan-pill svg { flex: none; }
 
     @keyframes pillBreathe {
       0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 rgba(51,230,255,0.0); border-color: var(--cyan-dim); }
@@ -123,8 +140,32 @@
     }
 
     .scan-pill.locked {
+      animation: lockedPulse 1s ease-out 1;
       border-color: var(--cyan);
       color: var(--ice);
+    }
+
+    @keyframes lockedPulse {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.12); box-shadow: 0 0 28px rgba(51,230,255,0.75); }
+      65%  { transform: scale(0.97); }
+      100% { transform: scale(1); }
+    }
+
+    .scan-pill::after {
+      content: "";
+      position: absolute;
+      top: 0; left: -60%;
+      width: 40%; height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(169,246,255,0.35), transparent);
+      transform: skewX(-20deg);
+      animation: sheen 3.2s ease-in-out infinite;
+    }
+
+    @keyframes sheen {
+      0%   { left: -60%; }
+      60%  { left: 130%; }
+      100% { left: 130%; }
     }
 
     .pill-rule {
@@ -133,35 +174,38 @@
       margin-top: 10px;
       background: linear-gradient(90deg, transparent, var(--cyan), transparent);
       opacity: 0.6;
+      transition: opacity 0.3s ease;
     }
 
+    /* Hide the scan pill while a landmark is open so it never shows through the dock */
     body.spot-open .scan-pill,
     body.spot-open .pill-rule {
       opacity: 0;
     }
 
-    /* Screen navigation dock */
+    /* Screen fallback dock for Maps navigation — HUD target-lock panel (two rows) */
     #active-info-bar {
       position: fixed;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* clears the browser toolbar */
       left: 16px;
       right: 16px;
       max-width: 420px;
       margin: 0 auto;
-      background: rgba(9,17,27,0.7);
-      backdrop-filter: blur(12px);
+      background: rgba(9,17,27,0.5);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(51,230,255,0.55);
-      border-radius: 6px;
+      border-radius: 4px;
       padding: 14px 16px;
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: wrap;              /* allows the second row */
       align-items: center;
       gap: 12px;
       pointer-events: none;
-      box-shadow: 0 12px 34px rgba(0,0,0,0.7), 0 0 22px rgba(51,230,255,0.15);
+      box-shadow: 0 12px 34px rgba(0,0,0,0.6), 0 0 22px rgba(51,230,255,0.12);
       opacity: 0;
       transform: translateY(60px) scale(0.96);
-      transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
+      transition: transform 0.45s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
     }
 
     #active-info-bar.active {
@@ -170,70 +214,97 @@
       pointer-events: auto;
     }
 
+    /* Targeting-reticle corner brackets on the lock panel */
     .corner {
       position: absolute;
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border: 1.5px solid var(--cyan);
+      opacity: 0.85;
     }
     .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
     .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
     .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
     .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
 
-    .info-text { flex: 1; min-width: 0; }
+    .info-text { flex: 1; min-width: 0; order: 1; }
 
     #info-title {
       color: var(--ice);
       font-family: 'Orbitron', sans-serif;
       font-weight: 600;
       font-size: 13.5px;
+      letter-spacing: 0.3px;
+      line-height: 1.3;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     #info-time {
-      margin-top: 3px;
+      margin-top: 4px;
       font-size: 12px;
       font-weight: 600;
+      letter-spacing: 0.4px;
       color: var(--cyan-soft);
     }
 
+    .dock-divider { display: none; }
+
     .btn-maps {
-      flex: 1 1 100%;
+      order: 3;
+      flex: 1 1 100%;               /* full-width second row */
       justify-content: center;
       background: var(--cyan);
       color: var(--ink);
       text-decoration: none;
+      font-family: 'Rajdhani', sans-serif;
       font-size: 14px;
       font-weight: 700;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
       text-transform: uppercase;
-      padding: 11px 14px;
+      padding: 12px 14px;
       border-radius: 4px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+    }
+
+    .btn-maps svg { flex: none; }
+
+    .btn-maps:active { transform: scale(0.97); }
+
+    .btn-maps:hover {
+      background: var(--cyan-soft);
+      box-shadow: 0 4px 16px rgba(51,230,255,0.55);
     }
 
     .btn-close {
+      order: 2;
       background: transparent;
       color: var(--cyan-soft);
       border: 1px solid rgba(169,246,255,0.4);
       border-radius: 4px;
       width: 28px;
       height: 28px;
+      flex: none;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
+    .btn-close:hover { background: rgba(255,79,129,0.12); border-color: var(--magenta); color: var(--magenta); }
+    .btn-close:active { transform: scale(0.88); }
+
+    /* Boot loader — radar sweep instead of a generic spinner */
     #boot-loader {
       position: fixed;
       inset: 0;
-      background: radial-gradient(circle at 50% 42%, #0b1c2c 0%, #030509 78%);
+      background:
+        radial-gradient(circle at 50% 42%, #0b1c2c 0%, #030509 78%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -243,17 +314,66 @@
       transition: opacity 0.6s ease, visibility 0.6s ease;
     }
 
+    #boot-loader::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(51,230,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(51,230,255,0.06) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+    }
+
     #boot-loader.hidden {
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
     }
+
+    .loader-radar {
+      width: 54px;
+      height: 54px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .loader-radar svg {
+      width: 100%;
+      height: 100%;
+      animation: spin 1.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #boot-loader span {
+      position: relative;
+      z-index: 1;
+      color: var(--cyan-soft);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11.5px;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Lightweight boot loader so the first paint isn't a blank black screen -->
   <div id="boot-loader">
-    <span style="color: var(--cyan-soft); font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1.5px;">CALIBRATING AR HUD...</span>
+    <div class="loader-radar">
+      <svg viewBox="0 0 54 54" fill="none">
+        <circle cx="27" cy="27" r="23" stroke="#1c7f94" stroke-width="1.2" opacity="0.5"/>
+        <circle cx="27" cy="27" r="16" stroke="#1c7f94" stroke-width="1" opacity="0.35"/>
+        <path d="M27 27L27 4A23 23 0 0 1 46.9 16.5L27 27Z" fill="#33e6ff" opacity="0.35"/>
+        <circle cx="27" cy="27" r="23" stroke="#33e6ff" stroke-width="1.4" stroke-dasharray="8 130" stroke-linecap="round"/>
+        <circle cx="27" cy="27" r="2.4" fill="#33e6ff"/>
+      </svg>
+    </div>
+    <span>Calibrating AR interface&hellip;</span>
   </div>
 
   <div id="scan-sweep"></div>
@@ -261,10 +381,17 @@
 
   <div id="ui-container">
     <div class="scan-pill" id="scanPrompt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <path d="M17.5 14v3.5M15.5 15.5h4"/>
+      </svg>
       <span id="scanPromptText">Point camera at the Ooty card</span>
     </div>
     <div class="pill-rule"></div>
 
+    <!-- Screen Navigation Dock (two rows: title/time/close, then full-width Directions) -->
     <div id="active-info-bar">
       <span class="corner corner-tl"></span>
       <span class="corner corner-tr"></span>
@@ -274,20 +401,31 @@
         <div id="info-title">Location Name</div>
         <div id="info-time">Drive time &middot; --</div>
       </div>
-      <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">✕</button>
-      <a id="mapsLink" href="#" target="_blank" rel="noopener" class="btn-maps">Directions</a>
+      <div class="dock-divider"></div>
+      <a id="mapsLink" href="#" target="_blank" rel="noopener" class="btn-maps">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M15 9l-2.2 5.8L9 17l2.2-5.8L15 9z" fill="currentColor" stroke="none"/>
+        </svg>
+        Directions
+      </a>
+      <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
     </div>
   </div>
 
   <!-- MindAR Scene -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets/card.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    mindar-image="imageTargetSrc: ./targets/targets.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
+    <!-- ALL MEDIA TEXTURES DECLARED HERE -->
     <a-assets>
+      <img id="pinIcon" src="https://cdn-icons-png.flaticon.com/512/684/684908.png" crossorigin="anonymous">
       <video id="arVideo"
              crossOrigin="anonymous"
              playsinline
@@ -297,237 +435,483 @@
              muted></video>
     </a-assets>
 
-    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable">
+    </a-camera>
 
+    <!-- Target Entity -->
     <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
 
-      <!-- ================= COMPACT FLOATING AR PANEL ================= -->
-      <a-entity id="videoScreenGroup" position="0 0.62 0.12" rotation="14 0 0" scale="0.01 0.01 0.01" visible="false">
+      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless HUD panel) ================= -->
+      <a-entity id="videoScreenGroup" position="0 0.65 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
 
-        <!-- Panel Backdrop Plate -->
-        <a-plane position="0 0 -0.01" width="0.74" height="0.66" color="#0a1420" material="opacity: 0.88; roughness: 0.8"></a-plane>
-        <a-plane position="0 0 -0.011" width="0.746" height="0.666" color="#33e6ff" material="opacity: 0.5"></a-plane>
+        <!-- Glass backing plate (extended to cover the Directions row) -->
+        <a-plane position="0 -0.0935 -0.012" width="0.74" height="0.715" color="#0a1420" material="opacity: 0.35; roughness: 0.9; metalness: 0.3"></a-plane>
 
-        <!-- 1. HEADER ROW: Title + Distance Pill -->
-        <a-entity position="0 0.25 0.01">
-          <a-text id="arVideoTitle" value="LOCATION TITLE" align="left" color="#eaf6ff" width="1.1" position="-0.33 0.03 0"></a-text>
-          
-          <!-- Distance pill badge right below title -->
-          <a-plane position="-0.21 -0.035 0.005" width="0.26" height="0.036" color="#0c1a2a" material="opacity: 0.9">
-            <a-text id="arDistanceTab" value="Drive time · --" align="center" color="#33e6ff" width="0.85"></a-text>
-          </a-plane>
-        </a-entity>
+        <!-- Thin cyan edge -->
+        <a-plane position="0 -0.0935 -0.013" width="0.744" height="0.719" color="#33e6ff" material="opacity: 0.6"></a-plane>
 
-        <!-- Enlarged hit-zone for Close Button (Invisible trigger + visible icon) -->
-        <a-entity position="0.31 0.26 0.015">
-          <a-plane id="arCloseHitbox" class="clickable" width="0.14" height="0.14" material="opacity: 0.0; transparent: true">
-            <a-circle radius="0.024" color="#0c1a2a" material="opacity: 0.85">
-              <a-text value="&#10005;" align="center" color="#ff4f81" width="1.0" position="0 0 0.005"></a-text>
-            </a-circle>
-          </a-plane>
-        </a-entity>
+        <!-- Video Surface, flush edge-to-edge -->
+        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
 
-        <!-- 2. VIDEO SURFACE + POSTER LAYER -->
-        <a-entity position="0 0.015 0.005">
-          <a-video id="videoPlane" src="#arVideo" width="0.70" height="0.394" material="shader: flat;"></a-video>
+        <!-- Header Banner -->
+        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#0c1a2a" material="opacity: 0.6">
+          <a-text id="arVideoTitle" value="LOCATION TITLE" align="center" color="#a9f6ff" width="1.0" baseline="center"></a-text>
+        </a-plane>
+        <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.85"></a-plane>
 
-          <!-- Placeholder / Poster Plane (Shown before play) -->
-          <a-plane id="posterPlane" width="0.70" height="0.394" position="0 0 0.002" color="#0e2238" material="opacity: 1">
-            <a-text id="posterLabel" value="PREVIEW READY" align="center" color="#a9f6ff" width="0.8"></a-text>
-          </a-plane>
-
-          <!-- Big Circular Overlay Play / Pause Button -->
-          <a-entity id="centerPlayBtn" class="clickable" position="0 0 0.02">
-            <!-- Oversized tap surface -->
-            <a-plane width="0.22" height="0.22" material="opacity: 0; transparent: true"></a-plane>
-            <!-- Visible Play Disc -->
-            <a-circle id="playCircle" radius="0.055" color="#33e6ff" material="opacity: 0.9">
-              <a-text id="playIconText" value="&#9654;" align="center" color="#030507" width="1.8" position="0.003 0 0.002"></a-text>
-            </a-circle>
-          </a-entity>
-
-          <!-- Bottom progress indicator line -->
-          <a-plane id="progressBar" position="0 -0.192 0.01" width="0.70" height="0.008" color="#1c7f94" material="opacity: 0.4">
-            <a-plane id="progressFill" position="-0.35 0 0.001" width="0.001" height="0.008" color="#33e6ff" material="opacity: 0.9"></a-plane>
-          </a-plane>
-        </a-entity>
-
-        <!-- 3. FOOTER: Single Primary Action (Directions) -->
-        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.245 0.02" width="0.70" height="0.075" color="#33e6ff" material="opacity: 0.95"
-                 animation__idle="property: scale; dir: alternate; dur: 1400; loop: true; easing: easeInOutSine; to: 1.02 1.02 1.02">
-          <a-text value="GET DIRECTIONS" align="center" color="#030507" width="1.2"></a-text>
+        <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
+        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#33e6ff" material="opacity: 0.8"
+                 animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
+          <a-text id="playPauseText" value="&#9654; PLAY VIDEO" align="center" color="#030507" width="1.1"></a-text>
         </a-plane>
 
+        <!-- Close Button -->
+        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#ff4f81" material="opacity: 0.8">
+          <a-text value="&#10005; CLOSE" align="center" color="#030507" width="1.05"></a-text>
+        </a-plane>
+
+        <!-- Distance Tab — sits right below the Play/Close row -->
+        <a-plane id="arDistanceTabBg" position="0 -0.3275 0.01" width="0.72" height="0.055" color="#0c1a2a" material="opacity: 0.6">
+          <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" color="#33e6ff" width="1.35" baseline="center"></a-text>
+        </a-plane>
+
+        <!-- Directions Button — full-width third row, opens Google Maps -->
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.405 0.02" width="0.72" height="0.06" color="#a9f6ff" material="opacity: 0.8">
+          <a-text value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
+        </a-plane>
       </a-entity>
 
-      <!-- ================= HOTSPOTS ON CARD ================= -->
-      <a-plane class="clickable spot-btn" data-id="ooty_lake" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.7">
+      <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD ================= -->
+      <a-plane class="clickable spot-btn" data-id="ooty_lake" data-icon="wave" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 0">
         <a-text value="Ooty Lake\n(13 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="botanical_garden" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.7">
+      <a-plane class="clickable spot-btn" data-id="pykara" data-icon="drop" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 200">
+        <a-text value="Pykara Lake\n(55 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="rose_garden" data-icon="leaf" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 400">
+        <a-text value="Rose Garden\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="botanical_garden" data-icon="leaf" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 600">
         <a-text value="Botanical Garden\n(5 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
 
-      <a-plane class="clickable spot-btn" data-id="doddabetta" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.7">
+      <a-plane class="clickable spot-btn" data-id="murugan_temple" data-icon="temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 800">
+        <a-text value="Murugan Temple\n(8 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="govt_museum" data-icon="museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1000">
+        <a-text value="Govt Museum\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="doddabetta" data-icon="peak" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1200">
         <a-text value="Doddabetta Peak\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
       </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="pine_forest" data-icon="pine" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1400">
+        <a-text value="Pine Forest\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="avalanche" data-icon="drop" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1600">
+        <a-text value="Avalanche Lake\n(1 hr 15 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="mudumalai" data-icon="paw" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1800">
+        <a-text value="Mudumalai Park\n(1 hr 20 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
+      </a-plane>
+
     </a-entity>
   </a-scene>
 
   <script>
+    // NOTE: lat/lng are APPROXIMATE. Right-click each spot in Google Maps and paste the exact values.
     const PLACES = {
       ooty_lake: {
+        lat: 11.403, lng: 76.6875,
         title: "Ooty Lake & Boathouse",
         time: "13 min (2.4 km)",
-        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-        poster: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=600&auto=format&fit=crop&q=60",
+        video: "ooty/Ooty_Lake.mp4",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse"
       },
+      pykara: {
+        lat: 11.465, lng: 76.595,
+        title: "Pykara Waterfalls & Lake",
+        time: "55 min (21 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls"
+      },
+      rose_garden: {
+        lat: 11.4114, lng: 76.7053,
+        title: "Government Rose Garden",
+        time: "4 min (0.6 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty"
+      },
       botanical_garden: {
-        title: "Botanical Garden",
+        lat: 11.4187, lng: 76.7112,
+        title: "Government Botanical Garden",
         time: "5 min (0.8 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
-        poster: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=600&auto=format&fit=crop&q=60",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty"
       },
+      murugan_temple: {
+        lat: 11.4096, lng: 76.6868,
+        title: "Elk Hill Murugan Temple",
+        time: "8 min (1.4 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty"
+      },
+      govt_museum: {
+        lat: 11.4171, lng: 76.7101,
+        title: "Government Museum Ooty",
+        time: "4 min (0.7 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty"
+      },
       doddabetta: {
-        title: "Doddabetta Peak",
+        lat: 11.4, lng: 76.7357,
+        title: "Doddabetta Peak Observatory",
         time: "35 min (9.5 km)",
         video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-        poster: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=60",
         maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak"
+      },
+      pine_forest: {
+        lat: 11.4361, lng: 76.6752,
+        title: "Pine Forest (Shooting Spot)",
+        time: "35 min (10 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty"
+      },
+      avalanche: {
+        lat: 11.2761, lng: 76.5583,
+        title: "Avalanche Lake Checkpoint",
+        time: "1 hr 15 min (25 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty"
+      },
+      mudumalai: {
+        lat: 11.5675, lng: 76.533,
+        title: "Mudumalai Tiger Reserve",
+        time: "1 hr 20 min (37 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Mudumalai+National+Park"
       }
     };
+
+    // ---- Custom cyan line-icon set for the AR hotspot badges ----
+    const ICON_PATHS = {
+      wave:   '<path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+      drop:   '<path d="M12 3c4 5 6 8.2 6 11.2A6 6 0 1 1 6 14.2C6 11.2 8 8 12 3z"/>',
+      leaf:   '<path d="M4 20c8 0 14-6 14-14 0 0-2 1-5 1C7 7 4 12 4 20z"/><path d="M4 20c0-6 3-9 8-11"/>',
+      temple: '<path d="M12 3l3.2 4H8.8L12 3z"/><path d="M7.5 8h9v3h-9z"/><path d="M6 12h12v7H6z"/><path d="M10 19v-4h4v4"/>',
+      museum: '<path d="M12 3l7.5 4.2H4.5L12 3z"/><path d="M5 9v8M9 9v8M15 9v8M19 9v8"/><path d="M4 19h16"/>',
+      peak:   '<path d="M3 18.5l5.8-9.6 3.4 5 2.6-3.4 6.2 8h-18z"/>',
+      pine:   '<path d="M12 3l3.6 5.4h-2L17 13h-2.6l3.1 5H6.5l3.1-5H7l3.4-4.6h-2L12 3z"/><path d="M11 18h2v3h-2z"/>',
+      paw:    '<circle cx="8" cy="10.5" r="1.7"/><circle cx="16" cy="10.5" r="1.7"/><circle cx="6" cy="6.5" r="1.2"/><circle cx="18" cy="6.5" r="1.2"/><path d="M12 21c-3 0-5.2-1.6-5.2-4.1 0-2.1 2.1-3.7 5.2-3.7s5.2 1.6 5.2 3.7C17.2 19.4 15 21 12 21z"/>'
+    };
+
+    function iconDataUri(pathId) {
+      const inner = ICON_PATHS[pathId] || ICON_PATHS.leaf;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0a1420" stroke-width="1.7" ' +
+                  'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+      return 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+
+    // Give every hotspot a slim cyan edge + a corner emblem carrying its category icon
+    function dressUpHotspots() {
+      document.querySelectorAll('.spot-btn').forEach(el => {
+        const w = parseFloat(el.getAttribute('width'));
+        const h = parseFloat(el.getAttribute('height'));
+        const pos = el.getAttribute('position');
+        const iconKey = el.getAttribute('data-icon') || 'leaf';
+
+        // Thin cyan edge sitting just behind the plate
+        const frame = document.createElement('a-plane');
+        frame.setAttribute('width', (w + 0.01).toFixed(3));
+        frame.setAttribute('height', (h + 0.01).toFixed(3));
+        frame.setAttribute('color', '#33e6ff');
+        frame.setAttribute('material', 'opacity: 0.7');
+        frame.setAttribute('position', `${pos.x} ${pos.y} ${pos.z - 0.004}`);
+        el.parentNode.insertBefore(frame, el);
+
+        // Corner emblem: cyan ring + navy disc + icon glyph
+        const cx = -w / 2 + 0.026;
+        const cy = h / 2 - 0.024;
+
+        const ring = document.createElement('a-ring');
+        ring.setAttribute('radius-inner', '0.018');
+        ring.setAttribute('radius-outer', '0.0215');
+        ring.setAttribute('color', '#33e6ff');
+        ring.setAttribute('position', `${cx} ${cy} 0.002`);
+        el.appendChild(ring);
+
+        const disc = document.createElement('a-circle');
+        disc.setAttribute('radius', '0.018');
+        disc.setAttribute('color', '#a9f6ff');
+        disc.setAttribute('position', `${cx} ${cy} 0.0025`);
+        el.appendChild(disc);
+
+        const icon = document.createElement('a-image');
+        icon.setAttribute('width', '0.026');
+        icon.setAttribute('height', '0.026');
+        icon.setAttribute('position', `${cx} ${cy} 0.003`);
+        icon.setAttribute('transparent', 'true');
+        icon.setAttribute('src', iconDataUri(iconKey));
+        el.appendChild(icon);
+      });
+    }
 
     const videoEl = document.getElementById('arVideo');
     const screenGroup = document.getElementById('videoScreenGroup');
     const arTitle = document.getElementById('arVideoTitle');
     const arDistanceTab = document.getElementById('arDistanceTab');
-    const posterPlane = document.getElementById('posterPlane');
-    const centerPlayBtn = document.getElementById('centerPlayBtn');
-    const playCircle = document.getElementById('playCircle');
-    const playIconText = document.getElementById('playIconText');
-    const progressFill = document.getElementById('progressFill');
+    const playPauseBtn = document.getElementById('arPlayPauseBtn');
+    const playPauseText = document.getElementById('playPauseText');
     const arDirectionsBtn = document.getElementById('arDirectionsBtn');
-
     const bottomBar = document.getElementById('active-info-bar');
     const infoTitle = document.getElementById('info-title');
     const infoTime = document.getElementById('info-time');
     const mapsLink = document.getElementById('mapsLink');
     const bootLoader = document.getElementById('boot-loader');
+
     const sceneEl = document.querySelector('a-scene');
 
+    // Maps URL for the landmark that is currently open (used by the AR Directions button)
     let currentMapsUrl = '';
 
+    // Build the icon badges once the scene's entities exist
+    if (sceneEl.hasLoaded) {
+      dressUpHotspots();
+    } else {
+      sceneEl.addEventListener('loaded', dressUpHotspots);
+    }
+
+    // Hide the boot loader once the AR scene has rendered its first frame
     sceneEl.addEventListener('renderstart', () => {
       bootLoader.classList.add('hidden');
     });
+    setTimeout(() => bootLoader.classList.add('hidden'), 4000);
 
-    // Spot selection handler
+    // Little scale "pop" used for tap feedback on any clickable a-plane
+    function popFeedback(el) {
+      el.removeAttribute('animation__pop');
+      el.setAttribute('animation__pop', {
+        property: 'scale',
+        from: '0.85 0.85 0.85',
+        to: '1 1 1',
+        dur: 220,
+        easing: 'easeOutBack'
+      });
+    }
+
+    // ---- Live distance from the user's current location ----
+    let liveRequestId = 0;
+    let userPos = null;
+    let userPosTime = 0;
+    const POS_MAX_AGE = 60000; // reuse a location fix for 60 s
+
+    function getUserPosition() {
+      if (userPos && Date.now() - userPosTime < POS_MAX_AGE) return Promise.resolve(userPos);
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            userPosTime = Date.now();
+            resolve(userPos);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      });
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    async function fetchRoute(from, to) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+                    from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat + '?overview=false';
+        const res = await fetch(url, { signal: ctrl.signal });
+        const j = await res.json();
+        if (!j.routes || !j.routes.length) throw new Error('no route');
+        return { km: j.routes[0].distance / 1000, min: Math.round(j.routes[0].duration / 60) };
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function formatKm(km) { return km < 10 ? km.toFixed(1) : String(Math.round(km)); }
+
+    function formatDuration(min) {
+      if (min < 60) return min + ' min';
+      const h = Math.floor(min / 60), m = min % 60;
+      return h + ' hr' + (m ? ' ' + m + ' min' : '');
+    }
+
+    function setDistanceLabel(text) {
+      arDistanceTab.setAttribute('value', text);
+      infoTime.innerText = text;
+    }
+
+    // Shows the fixed value first (set in the click handler), then swaps in the live one
+    async function updateLiveDistance(id) {
+      const data = PLACES[id];
+      if (!data || data.lat == null) return;
+      const reqId = ++liveRequestId;
+
+      const from = await getUserPosition();
+      if (!from || reqId !== liveRequestId) return; // denied, failed, or user moved on
+
+      const to = { lat: data.lat, lng: data.lng };
+      let label;
+      try {
+        const r = await fetchRoute(from, to);
+        label = 'From you \u00B7 ' + formatDuration(r.min) + ' (' + formatKm(r.km) + ' km)';
+      } catch (e) {
+        label = 'From you \u00B7 ~' + formatKm(haversineKm(from, to)) + ' km straight line';
+      }
+      if (reqId !== liveRequestId) return;
+      setDistanceLabel(label);
+    }
+
+    // Attach click listeners to landmark buttons
     document.querySelectorAll('.spot-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
         const data = PLACES[id];
         if (!data) return;
 
+        popFeedback(btn);
+
         videoEl.pause();
         videoEl.src = data.video;
         videoEl.load();
 
-        // Restore poster and play button state
-        posterPlane.setAttribute('visible', 'true');
-        if (data.poster) {
-          posterPlane.setAttribute('src', data.poster);
-        }
-        playCircle.setAttribute('color', '#33e6ff');
-        playCircle.setAttribute('radius', '0.055');
-        playIconText.setAttribute('value', '\u25B6');
-        playIconText.setAttribute('color', '#030507');
-        centerPlayBtn.setAttribute('position', '0 0 0.02');
+        playPauseBtn.setAttribute('color', '#33e6ff');
+        playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
+        playPauseText.setAttribute('color', '#030507');
 
         arTitle.setAttribute('value', data.title);
-        arDistanceTab.setAttribute('value', data.time);
-        currentMapsUrl = data.maps;
-
+        arDistanceTab.setAttribute('value', 'Drive time \u00B7 ' + data.time);
         screenGroup.setAttribute('visible', 'true');
+        screenGroup.removeAttribute('animation__show');
         screenGroup.setAttribute('animation__show', {
           property: 'scale',
           from: '0.05 0.05 0.05',
           to: '1 1 1',
-          dur: 350,
-          easing: 'easeOutBack'
+          dur: 420,
+          easing: 'easeOutElastic'
         });
 
-        // Sync HTML Dock
+        currentMapsUrl = data.maps;
+
         infoTitle.innerText = data.title;
-        infoTime.innerText = data.time;
+        infoTime.innerText = "Drive time \u00B7 " + data.time;
         mapsLink.href = data.maps;
         bottomBar.classList.add('active');
         document.body.classList.add('spot-open');
+
+        updateLiveDistance(id);
       });
     });
 
-    // Video progress updater
-    videoEl.addEventListener('timeupdate', () => {
-      if (!videoEl.duration) return;
-      const progress = videoEl.currentTime / videoEl.duration;
-      const w = 0.70 * progress;
-      progressFill.setAttribute('width', Math.max(0.001, w));
-      progressFill.setAttribute('position', `${-0.35 + (w / 2)} 0 0.001`);
-    });
-
-    // Toggle Play / Pause on video
-    centerPlayBtn.addEventListener('click', () => {
+    // AR Play / Pause Toggle Button Handler
+    playPauseBtn.addEventListener('click', () => {
+      popFeedback(playPauseBtn);
       if (videoEl.paused) {
-        posterPlane.setAttribute('visible', 'false');
         videoEl.muted = false;
         videoEl.play().then(() => {
-          setPlayingUI();
-        }).catch(() => {
+          playPauseBtn.setAttribute('color', '#8c6bff');
+          playPauseText.setAttribute('value', '\u275A\u275A PAUSE');
+          playPauseText.setAttribute('color', '#eaf6ff');
+        }).catch(err => {
           videoEl.muted = true;
           videoEl.play();
-          setPlayingUI();
+          playPauseBtn.setAttribute('color', '#8c6bff');
+          playPauseText.setAttribute('value', '\u275A\u275A PAUSE');
+          playPauseText.setAttribute('color', '#eaf6ff');
         });
       } else {
         videoEl.pause();
-        setPausedUI();
+        playPauseBtn.setAttribute('color', '#33e6ff');
+        playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
+        playPauseText.setAttribute('color', '#030507');
       }
     });
 
-    function setPlayingUI() {
-      // Reposition to corner as a mini-pause button
-      centerPlayBtn.setAttribute('position', '0.28 -0.13 0.02');
-      playCircle.setAttribute('radius', '0.03');
-      playCircle.setAttribute('color', '#8c6bff');
-      playIconText.setAttribute('value', '\u275A\u275A');
-      playIconText.setAttribute('color', '#ffffff');
-    }
-
-    function setPausedUI() {
-      centerPlayBtn.setAttribute('position', '0 0 0.02');
-      playCircle.setAttribute('radius', '0.055');
-      playCircle.setAttribute('color', '#33e6ff');
-      playIconText.setAttribute('value', '\u25B6');
-      playIconText.setAttribute('color', '#030507');
-    }
-
-    // Directions
+    // AR Directions Button Handler — opens Google Maps for the open landmark
     arDirectionsBtn.addEventListener('click', () => {
+      popFeedback(arDirectionsBtn);
       if (currentMapsUrl) window.open(currentMapsUrl, '_blank');
     });
 
-    // Close function
+    // Close button — animate the billboard shrinking away before hiding it
     function closeActiveSpot() {
+      liveRequestId++;
       videoEl.pause();
-      screenGroup.setAttribute('visible', 'false');
+
+      screenGroup.removeAttribute('animation__hide');
+      screenGroup.setAttribute('animation__hide', {
+        property: 'scale',
+        to: '0.01 0.01 0.01',
+        dur: 220,
+        easing: 'easeInBack'
+      });
+      setTimeout(() => screenGroup.setAttribute('visible', 'false'), 220);
+
       bottomBar.classList.remove('active');
       document.body.classList.remove('spot-open');
-      posterPlane.setAttribute('visible', 'true');
-      setPausedUI();
+      playPauseBtn.setAttribute('color', '#33e6ff');
+      playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
+      playPauseText.setAttribute('color', '#030507');
     }
 
-    document.getElementById('arCloseHitbox').addEventListener('click', closeActiveSpot);
+    document.getElementById('arCloseBtn').addEventListener('click', () => {
+      popFeedback(document.getElementById('arCloseBtn'));
+      closeActiveSpot();
+    });
+
+    // Target tracking events
+    const cardTarget = document.getElementById('cardTarget');
+    const scanPrompt = document.getElementById('scanPrompt');
+    const scanPromptText = document.getElementById('scanPromptText');
+
+    cardTarget.addEventListener("targetFound", () => {
+      scanPromptText.innerText = "Target locked \u2014 tap a landmark";
+      scanPrompt.classList.remove('locked');
+      void scanPrompt.offsetWidth;
+      scanPrompt.classList.add('locked');
+    });
+
+    cardTarget.addEventListener("targetLost", () => {
+      scanPromptText.innerText = "Point camera at the Ooty card";
+      scanPrompt.classList.remove('locked');
+      videoEl.pause();
+      playPauseBtn.setAttribute('color', '#33e6ff');
+      playPauseText.setAttribute('value', '\u25B6 PLAY VIDEO');
+      playPauseText.setAttribute('color', '#030507');
+    });
   </script>
 </body>
 </html>
