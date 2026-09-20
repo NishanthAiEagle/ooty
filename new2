@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Ooty AR Smart Concierge</title>
+
+  <!-- A-Frame & MindAR -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+  <!-- HUD type pairing -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --void:        #05080f;
+      --panel:       #0a1420;
+      --cyan:        #33e6ff;
+      --cyan-soft:   #a9f6ff;
+      --cyan-dim:    #1c7f94;
+      --violet:      #8c6bff;
+      --magenta:     #ff4f81;
+      --ice:         #eaf6ff;
+      --ink:         #030507;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Rajdhani', sans-serif;
+      background-color: #000;
+      color: var(--ice);
+    }
+
+    video#arVideo {
+      display: none !important;
+      position: absolute !important;
+      top: -99999px !important;
+      left: -99999px !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    #vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+      background: linear-gradient(to bottom, rgba(2,6,12,0.6) 0%, rgba(2,6,12,0) 16%, rgba(2,6,12,0) 78%, rgba(2,6,12,0.65) 100%);
+    }
+
+    #scan-sweep {
+      position: fixed;
+      inset: 0;
+      z-index: 9997;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.5;
+    }
+
+    #scan-sweep::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(to bottom, rgba(51,230,255,0) 0%, rgba(51,230,255,0.06) 50%, rgba(51,230,255,0) 100%);
+      animation: sweepDown 5s linear infinite;
+    }
+
+    @keyframes sweepDown {
+      0%   { top: -120px; }
+      100% { top: 100%; }
+    }
+
+    #ui-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      pointer-events: none;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+      opacity: 0;
+      animation: uiFadeIn 0.8s ease forwards 0.2s;
+    }
+
+    @keyframes uiFadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .scan-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(10,20,32,0.75);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--cyan-dim);
+      color: var(--cyan-soft);
+      padding: 9px 20px 9px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      animation: pillBreathe 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pillBreathe {
+      0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 rgba(51,230,255,0.0); border-color: var(--cyan-dim); }
+      50%      { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 18px rgba(51,230,255,0.55); border-color: var(--cyan); }
+    }
+
+    .scan-pill.locked {
+      border-color: var(--cyan);
+      color: var(--ice);
+    }
+
+    .pill-rule {
+      width: 40px;
+      height: 1px;
+      margin-top: 10px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.6;
+    }
+
+    body.spot-open .scan-pill,
+    body.spot-open .pill-rule {
+      opacity: 0;
+    }
+
+    /* Screen navigation dock */
+    #active-info-bar {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
+      left: 16px;
+      right: 16px;
+      max-width: 420px;
+      margin: 0 auto;
+      background: rgba(9,17,27,0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51,230,255,0.55);
+      border-radius: 6px;
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      pointer-events: none;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.7), 0 0 22px rgba(51,230,255,0.15);
+      opacity: 0;
+      transform: translateY(60px) scale(0.96);
+      transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
+    }
+
+    #active-info-bar.active {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .corner {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid var(--cyan);
+    }
+    .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+    .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    .info-text { flex: 1; min-width: 0; }
+
+    #info-title {
+      color: var(--ice);
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 600;
+      font-size: 13.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #info-time {
+      margin-top: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--cyan-soft);
+    }
+
+    .btn-maps {
+      flex: 1 1 100%;
+      justify-content: center;
+      background: var(--cyan);
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 11px 14px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-close {
+      background: transparent;
+      color: var(--cyan-soft);
+      border: 1px solid rgba(169,246,255,0.4);
+      border-radius: 4px;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 42%, #0b1c2c 0%, #030509 78%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 10000;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #boot-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="boot-loader">
+    <span style="color: var(--cyan-soft); font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 1.5px;">CALIBRATING AR HUD...</span>
+  </div>
+
+  <div id="scan-sweep"></div>
+  <div id="vignette"></div>
+
+  <div id="ui-container">
+    <div class="scan-pill" id="scanPrompt">
+      <span id="scanPromptText">Point camera at the Ooty card</span>
+    </div>
+    <div class="pill-rule"></div>
+
+    <div id="active-info-bar">
+      <span class="corner corner-tl"></span>
+      <span class="corner corner-tr"></span>
+      <span class="corner corner-bl"></span>
+      <span class="corner corner-br"></span>
+      <div class="info-text">
+        <div id="info-title">Location Name</div>
+        <div id="info-time">Drive time &middot; --</div>
+      </div>
+      <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">✕</button>
+      <a id="mapsLink" href="#" target="_blank" rel="noopener" class="btn-maps">Directions</a>
+    </div>
+  </div>
+
+  <!-- MindAR Scene -->
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets/targets.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <video id="arVideo"
+             crossOrigin="anonymous"
+             playsinline
+             webkit-playsinline
+             preload="auto"
+             loop
+             muted></video>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
+
+    <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
+
+      <!-- ================= COMPACT FLOATING AR PANEL ================= -->
+      <a-entity id="videoScreenGroup" position="0 0.62 0.12" rotation="14 0 0" scale="0.01 0.01 0.01" visible="false">
+
+        <!-- Panel Backdrop Plate -->
+        <a-plane position="0 0 -0.01" width="0.74" height="0.66" color="#0a1420" material="opacity: 0.88; roughness: 0.8"></a-plane>
+        <a-plane position="0 0 -0.011" width="0.746" height="0.666" color="#33e6ff" material="opacity: 0.5"></a-plane>
+
+        <!-- 1. HEADER ROW: Title + Distance Pill -->
+        <a-entity position="0 0.25 0.01">
+          <a-text id="arVideoTitle" value="LOCATION TITLE" align="left" color="#eaf6ff" width="1.1" position="-0.33 0.03 0"></a-text>
+          
+          <!-- Distance pill badge right below title -->
+          <a-plane position="-0.21 -0.035 0.005" width="0.26" height="0.036" color="#0c1a2a" material="opacity: 0.9">
+            <a-text id="arDistanceTab" value="Drive time · --" align="center" color="#33e6ff" width="0.85"></a-text>
+          </a-plane>
+        </a-entity>
+
+        <!-- Enlarged hit-zone for Close Button (Invisible trigger + visible icon) -->
+        <a-entity position="0.31 0.26 0.015">
+          <a-plane id="arCloseHitbox" class="clickable" width="0.14" height="0.14" material="opacity: 0.0; transparent: true">
+            <a-circle radius="0.024" color="#0c1a2a" material="opacity: 0.85">
+              <a-text value="&#10005;" align="center" color="#ff4f81" width="1.0" position="0 0 0.005"></a-text>
+            </a-circle>
+          </a-plane>
+        </a-entity>
+
+        <!-- 2. VIDEO SURFACE + POSTER LAYER -->
+        <a-entity position="0 0.015 0.005">
+          <a-video id="videoPlane" src="#arVideo" width="0.70" height="0.394" material="shader: flat;"></a-video>
+
+          <!-- Placeholder / Poster Plane (Shown before play) -->
+          <a-plane id="posterPlane" width="0.70" height="0.394" position="0 0 0.002" color="#0e2238" material="opacity: 1">
+            <a-text id="posterLabel" value="PREVIEW READY" align="center" color="#a9f6ff" width="0.8"></a-text>
+          </a-plane>
+
+          <!-- Big Circular Overlay Play / Pause Button -->
+          <a-entity id="centerPlayBtn" class="clickable" position="0 0 0.02">
+            <!-- Oversized tap surface -->
+            <a-plane width="0.22" height="0.22" material="opacity: 0; transparent: true"></a-plane>
+            <!-- Visible Play Disc -->
+            <a-circle id="playCircle" radius="0.055" color="#33e6ff" material="opacity: 0.9">
+              <a-text id="playIconText" value="&#9654;" align="center" color="#030507" width="1.8" position="0.003 0 0.002"></a-text>
+            </a-circle>
+          </a-entity>
+
+          <!-- Bottom progress indicator line -->
+          <a-plane id="progressBar" position="0 -0.192 0.01" width="0.70" height="0.008" color="#1c7f94" material="opacity: 0.4">
+            <a-plane id="progressFill" position="-0.35 0 0.001" width="0.001" height="0.008" color="#33e6ff" material="opacity: 0.9"></a-plane>
+          </a-plane>
+        </a-entity>
+
+        <!-- 3. FOOTER: Single Primary Action (Directions) -->
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.245 0.02" width="0.70" height="0.075" color="#33e6ff" material="opacity: 0.95"
+                 animation__idle="property: scale; dir: alternate; dur: 1400; loop: true; easing: easeInOutSine; to: 1.02 1.02 1.02">
+          <a-text value="GET DIRECTIONS" align="center" color="#030507" width="1.2"></a-text>
+        </a-plane>
+
+      </a-entity>
+
+      <!-- ================= HOTSPOTS ON CARD ================= -->
+      <a-plane class="clickable spot-btn" data-id="ooty_lake" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.7">
+        <a-text value="Ooty Lake\n(13 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="botanical_garden" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.7">
+        <a-text value="Botanical Garden\n(5 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="doddabetta" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.7">
+        <a-text value="Doddabetta Peak\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const PLACES = {
+      ooty_lake: {
+        title: "Ooty Lake & Boathouse",
+        time: "13 min (2.4 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        poster: "https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=600&auto=format&fit=crop&q=60",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse"
+      },
+      botanical_garden: {
+        title: "Botanical Garden",
+        time: "5 min (0.8 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        poster: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=600&auto=format&fit=crop&q=60",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty"
+      },
+      doddabetta: {
+        title: "Doddabetta Peak",
+        time: "35 min (9.5 km)",
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        poster: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=60",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak"
+      }
+    };
+
+    const videoEl = document.getElementById('arVideo');
+    const screenGroup = document.getElementById('videoScreenGroup');
+    const arTitle = document.getElementById('arVideoTitle');
+    const arDistanceTab = document.getElementById('arDistanceTab');
+    const posterPlane = document.getElementById('posterPlane');
+    const centerPlayBtn = document.getElementById('centerPlayBtn');
+    const playCircle = document.getElementById('playCircle');
+    const playIconText = document.getElementById('playIconText');
+    const progressFill = document.getElementById('progressFill');
+    const arDirectionsBtn = document.getElementById('arDirectionsBtn');
+
+    const bottomBar = document.getElementById('active-info-bar');
+    const infoTitle = document.getElementById('info-title');
+    const infoTime = document.getElementById('info-time');
+    const mapsLink = document.getElementById('mapsLink');
+    const bootLoader = document.getElementById('boot-loader');
+    const sceneEl = document.querySelector('a-scene');
+
+    let currentMapsUrl = '';
+
+    sceneEl.addEventListener('renderstart', () => {
+      bootLoader.classList.add('hidden');
+    });
+
+    // Spot selection handler
+    document.querySelectorAll('.spot-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const data = PLACES[id];
+        if (!data) return;
+
+        videoEl.pause();
+        videoEl.src = data.video;
+        videoEl.load();
+
+        // Restore poster and play button state
+        posterPlane.setAttribute('visible', 'true');
+        if (data.poster) {
+          posterPlane.setAttribute('src', data.poster);
+        }
+        playCircle.setAttribute('color', '#33e6ff');
+        playCircle.setAttribute('radius', '0.055');
+        playIconText.setAttribute('value', '\u25B6');
+        playIconText.setAttribute('color', '#030507');
+        centerPlayBtn.setAttribute('position', '0 0 0.02');
+
+        arTitle.setAttribute('value', data.title);
+        arDistanceTab.setAttribute('value', data.time);
+        currentMapsUrl = data.maps;
+
+        screenGroup.setAttribute('visible', 'true');
+        screenGroup.setAttribute('animation__show', {
+          property: 'scale',
+          from: '0.05 0.05 0.05',
+          to: '1 1 1',
+          dur: 350,
+          easing: 'easeOutBack'
+        });
+
+        // Sync HTML Dock
+        infoTitle.innerText = data.title;
+        infoTime.innerText = data.time;
+        mapsLink.href = data.maps;
+        bottomBar.classList.add('active');
+        document.body.classList.add('spot-open');
+      });
+    });
+
+    // Video progress updater
+    videoEl.addEventListener('timeupdate', () => {
+      if (!videoEl.duration) return;
+      const progress = videoEl.currentTime / videoEl.duration;
+      const w = 0.70 * progress;
+      progressFill.setAttribute('width', Math.max(0.001, w));
+      progressFill.setAttribute('position', `${-0.35 + (w / 2)} 0 0.001`);
+    });
+
+    // Toggle Play / Pause on video
+    centerPlayBtn.addEventListener('click', () => {
+      if (videoEl.paused) {
+        posterPlane.setAttribute('visible', 'false');
+        videoEl.muted = false;
+        videoEl.play().then(() => {
+          setPlayingUI();
+        }).catch(() => {
+          videoEl.muted = true;
+          videoEl.play();
+          setPlayingUI();
+        });
+      } else {
+        videoEl.pause();
+        setPausedUI();
+      }
+    });
+
+    function setPlayingUI() {
+      // Reposition to corner as a mini-pause button
+      centerPlayBtn.setAttribute('position', '0.28 -0.13 0.02');
+      playCircle.setAttribute('radius', '0.03');
+      playCircle.setAttribute('color', '#8c6bff');
+      playIconText.setAttribute('value', '\u275A\u275A');
+      playIconText.setAttribute('color', '#ffffff');
+    }
+
+    function setPausedUI() {
+      centerPlayBtn.setAttribute('position', '0 0 0.02');
+      playCircle.setAttribute('radius', '0.055');
+      playCircle.setAttribute('color', '#33e6ff');
+      playIconText.setAttribute('value', '\u25B6');
+      playIconText.setAttribute('color', '#030507');
+    }
+
+    // Directions
+    arDirectionsBtn.addEventListener('click', () => {
+      if (currentMapsUrl) window.open(currentMapsUrl, '_blank');
+    });
+
+    // Close function
+    function closeActiveSpot() {
+      videoEl.pause();
+      screenGroup.setAttribute('visible', 'false');
+      bottomBar.classList.remove('active');
+      document.body.classList.remove('spot-open');
+      posterPlane.setAttribute('visible', 'true');
+      setPausedUI();
+    }
+
+    document.getElementById('arCloseHitbox').addEventListener('click', closeActiveSpot);
+  </script>
+</body>
+</html>
