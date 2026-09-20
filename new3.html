@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Ooty AR Smart Concierge</title>
+
+  <!-- A-Frame & MindAR -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+  <!-- HUD type pairing: an angular display face for labels, a condensed tech grotesk for body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+Tamil:wght@500;600;700&family=Noto+Sans+Devanagari:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* HUD palette: void navy, electric cyan primary, violet secondary, magenta alert */
+      --void:        #05080f;
+      --panel:       #0a1420;
+      --panel-2:     #0c1a2a;
+      --cyan:        #33e6ff;
+      --cyan-soft:   #a9f6ff;
+      --cyan-dim:    #1c7f94;
+      --violet:      #8c6bff;
+      --violet-soft: #c9bbff;
+      --magenta:     #ff4f81;
+      --ice:         #eaf6ff;
+      --ink:         #030507;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Rajdhani', sans-serif;
+      background-color: #000;
+      color: var(--ice);
+    }
+
+    .hud-label { font-family: 'Orbitron', sans-serif; }
+
+    /* PREVENTS RAW HTML VIDEO FROM RENDERING ON SCREEN */
+    video#arVideo {
+      display: none !important;
+      visibility: hidden !important;
+      position: absolute !important;
+      top: -99999px !important;
+      left: -99999px !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    /* Subtle scanline + vignette so UI reads over any camera background */
+    #vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+      background:
+        linear-gradient(to bottom, rgba(2,6,12,0.6) 0%, rgba(2,6,12,0) 16%, rgba(2,6,12,0) 78%, rgba(2,6,12,0.65) 100%);
+    }
+
+    #scan-sweep {
+      position: fixed;
+      inset: 0;
+      z-index: 9997;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.5;
+    }
+
+    #scan-sweep::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(to bottom, rgba(51,230,255,0) 0%, rgba(51,230,255,0.06) 50%, rgba(51,230,255,0) 100%);
+      animation: sweepDown 5s linear infinite;
+    }
+
+    @keyframes sweepDown {
+      0%   { top: -120px; }
+      100% { top: 100%; }
+    }
+
+    /* Screen UI Overlay */
+    #ui-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      pointer-events: none;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+      opacity: 0;
+      animation: uiFadeIn 0.8s ease forwards 0.2s;
+    }
+
+    @keyframes uiFadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .scan-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(10,20,32,0.7);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid var(--cyan-dim);
+      color: var(--cyan-soft);
+      padding: 9px 20px 9px 16px;
+      border-radius: 999px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      box-shadow: 0 0 0 rgba(51,230,255,0);
+      transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+      animation: pillBreathe 2.4s ease-in-out infinite;
+    }
+
+    .scan-pill svg { flex: none; }
+
+    @keyframes pillBreathe {
+      0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 rgba(51,230,255,0.0); border-color: var(--cyan-dim); }
+      50%      { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 18px rgba(51,230,255,0.55); border-color: var(--cyan); }
+    }
+
+    .scan-pill.locked {
+      animation: lockedPulse 1s ease-out 1;
+      border-color: var(--cyan);
+      color: var(--ice);
+    }
+
+    @keyframes lockedPulse {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.12); box-shadow: 0 0 28px rgba(51,230,255,0.75); }
+      65%  { transform: scale(0.97); }
+      100% { transform: scale(1); }
+    }
+
+    .scan-pill::after {
+      content: "";
+      position: absolute;
+      top: 0; left: -60%;
+      width: 40%; height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(169,246,255,0.35), transparent);
+      transform: skewX(-20deg);
+      animation: sheen 3.2s ease-in-out infinite;
+    }
+
+    @keyframes sheen {
+      0%   { left: -60%; }
+      60%  { left: 130%; }
+      100% { left: 130%; }
+    }
+
+    .pill-rule {
+      width: 40px;
+      height: 1px;
+      margin-top: 10px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.6;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Hide the scan pill while a landmark is open so it never shows through the dock */
+    body.spot-open .scan-pill,
+    body.spot-open .pill-rule {
+      opacity: 0;
+    }
+
+    /* Screen fallback dock for Maps navigation — HUD target-lock panel */
+    #active-info-bar {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* clears the browser toolbar */
+      left: 16px;
+      right: 16px;
+      max-width: 420px;
+      margin: 0 auto;
+      background: rgba(9,17,27,0.5);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(51,230,255,0.55);
+      border-radius: 4px;
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      pointer-events: none;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.6), 0 0 22px rgba(51,230,255,0.12);
+      opacity: 0;
+      transform: translateY(60px) scale(0.96);
+      transition: transform 0.45s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
+    }
+
+    #active-info-bar.active {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    /* Targeting-reticle corner brackets on the lock panel */
+    .corner {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid var(--cyan);
+      opacity: 0.85;
+    }
+    .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+    .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    .info-text { flex: 1; min-width: 0; order: 1; }
+
+    #info-title {
+      color: var(--ice);
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 600;
+      font-size: 13.5px;
+      letter-spacing: 0.3px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #info-time {
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      color: var(--cyan-soft);
+    }
+
+    .dock-divider { display: none; }
+
+    /* Language toggle, under the scan pill. Always visible; 40px-high tap targets. */
+    #lang-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+      padding: 4px;
+      background: rgba(9,17,27,0.94);
+      border: 1px solid rgba(51,230,255,0.45);
+      border-radius: 999px;
+      pointer-events: auto;
+    }
+
+    #lang-toggle button {
+      min-width: 52px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--cyan-soft);
+      font-family: 'Rajdhani', 'Noto Sans Tamil', 'Noto Sans Devanagari', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    #lang-toggle button[aria-pressed="true"] { background: var(--cyan); color: var(--ink); }
+    #lang-toggle button:focus-visible { outline: 2px solid var(--ice); outline-offset: 1px; }
+
+    /* Tamil and Hindi only: use the Noto faces, drop letter-spacing (it breaks letter joining),
+       and let long dock titles wrap to two lines. English styling is untouched. */
+    html[lang="ta"] body *, html[lang="hi"] body * { letter-spacing: normal !important; }
+    html[lang="ta"] .scan-pill, html[lang="ta"] #info-title, html[lang="ta"] #info-time,
+    html[lang="ta"] #boot-loader span, html[lang="ta"] #lang-toggle button { font-family: 'Noto Sans Tamil', sans-serif; }
+    html[lang="hi"] .scan-pill, html[lang="hi"] #info-title, html[lang="hi"] #info-time,
+    html[lang="hi"] #boot-loader span, html[lang="hi"] #lang-toggle button { font-family: 'Noto Sans Devanagari', sans-serif; }
+    html[lang="ta"] #info-title, html[lang="hi"] #info-title {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.5;
+    }
+
+    /* Boot loader — radar sweep instead of a generic spinner */
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 42%, #0b1c2c 0%, #030509 78%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 10000;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #boot-loader::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(51,230,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(51,230,255,0.06) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+    }
+
+    #boot-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-radar {
+      width: 54px;
+      height: 54px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .loader-radar svg {
+      width: 100%;
+      height: 100%;
+      animation: spin 1.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #boot-loader span {
+      position: relative;
+      z-index: 1;
+      color: var(--cyan-soft);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11.5px;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Lightweight boot loader so the first paint isn't a blank black screen -->
+  <div id="boot-loader">
+    <div class="loader-radar">
+      <svg viewBox="0 0 54 54" fill="none">
+        <circle cx="27" cy="27" r="23" stroke="#1c7f94" stroke-width="1.2" opacity="0.5"/>
+        <circle cx="27" cy="27" r="16" stroke="#1c7f94" stroke-width="1" opacity="0.35"/>
+        <path d="M27 27L27 4A23 23 0 0 1 46.9 16.5L27 27Z" fill="#33e6ff" opacity="0.35"/>
+        <circle cx="27" cy="27" r="23" stroke="#33e6ff" stroke-width="1.4" stroke-dasharray="8 130" stroke-linecap="round"/>
+        <circle cx="27" cy="27" r="2.4" fill="#33e6ff"/>
+      </svg>
+    </div>
+    <span id="bootText">Calibrating AR interface&hellip;</span>
+  </div>
+
+  <div id="scan-sweep"></div>
+  <div id="vignette"></div>
+
+  <div id="ui-container">
+    <div class="scan-pill" id="scanPrompt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <path d="M17.5 14v3.5M15.5 15.5h4"/>
+      </svg>
+      <span id="scanPromptText">Point camera at the Ooty card</span>
+    </div>
+    <div class="pill-rule"></div>
+
+    <!-- Language toggle -->
+    <div id="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ta" lang="ta" aria-pressed="false">தமிழ்</button>
+      <button type="button" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button>
+    </div>
+
+    <!-- Screen Navigation Dock (title/time + close button) -->
+    <div id="active-info-bar">
+      <span class="corner corner-tl"></span>
+      <span class="corner corner-tr"></span>
+      <span class="corner corner-bl"></span>
+      <span class="corner corner-br"></span>
+      <div class="info-text">
+        <div id="info-title">Location Name</div>
+        <div id="info-time">Drive time &middot; --</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MindAR Scene -->
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets/card.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <!-- ALL MEDIA TEXTURES DECLARED HERE -->
+    <a-assets>
+      <img id="pinIcon" src="https://cdn-icons-png.flaticon.com/512/684/684908.png" crossorigin="anonymous">
+      <video id="arVideo"
+             crossOrigin="anonymous"
+             playsinline
+             webkit-playsinline
+             preload="auto"
+             loop
+             muted></video>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable">
+    </a-camera>
+
+    <!-- Target Entity -->
+    <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
+
+      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless HUD panel) =================
+           Layout, top to bottom:
+             header     title (left), close icon (corner), distance pill (under the title)
+             video      poster before play, round play button, progress bar while playing
+             directions one full-width button
+           Everything is drawn from planes, circles and triangles, so no text glyphs are needed for icons. -->
+      <a-entity id="videoScreenGroup" position="0 0.65 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
+
+        <!-- Glass backing plate (covers header, video and the Directions row) -->
+        <a-plane position="0 0.0025 -0.012" width="0.74" height="0.64" color="#0a1420" material="opacity: 0.35; roughness: 0.9; metalness: 0.3"></a-plane>
+
+        <!-- Thin cyan edge -->
+        <a-plane position="0 0.0025 -0.013" width="0.744" height="0.644" color="#33e6ff" material="opacity: 0.6"></a-plane>
+
+        <!-- Video surface, flush edge-to-edge. Tapping anywhere on it toggles play / pause. -->
+        <a-video id="videoPlane" class="clickable" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
+
+        <!-- Poster still, shown before the first play when a place has a `poster` image (see PLACES) -->
+        <a-image id="arPoster" position="0 0 0.006" width="0.72" height="0.405" visible="false"></a-image>
+
+        <!-- Header: title on the left, distance pill underneath, close icon in the top-right corner -->
+        <a-plane position="0 0.2625 0.01" width="0.72" height="0.12" color="#0c1a2a" material="opacity: 0.6"></a-plane>
+        <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.85"></a-plane>
+        <a-text id="arVideoTitle" value="LOCATION TITLE" align="left" anchor="left" baseline="center" color="#a9f6ff" width="1.0" position="-0.335 0.2925 0.012"></a-text>
+        <!-- Tamil / Hindi version of the title (a-text cannot shape those scripts); hidden in English -->
+        <a-image id="altTitle" width="0.62" height="0.06" position="-0.025 0.2925 0.012" visible="false"></a-image>
+
+        <!-- Distance pill: one plane plus two end circles, resized to fit its text by fitPill() -->
+        <a-entity id="arDistPill" position="-0.335 0.2345 0.012">
+          <a-plane id="pillBody" position="0.2 0 0" width="0.362" height="0.038" color="#123047"></a-plane>
+          <a-circle id="pillL" position="0.019 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
+          <a-circle id="pillR" position="0.381 0 0" radius="0.019" segments="24" color="#123047"></a-circle>
+          <a-text id="arDistanceTab" value="Drive time &middot; --" align="center" baseline="center" color="#33e6ff" width="0.9" position="0.2 0 0.002"></a-text>
+          <a-image id="altDistance" width="0.56" height="0.038" position="0.2 0 0.003" visible="false"></a-image>
+        </a-entity>
+
+        <!-- Close: small icon with a larger invisible tap area around it -->
+        <a-plane id="arCloseBtn" class="clickable" position="0.305 0.2625 0.02" width="0.11" height="0.11" material="opacity: 0; transparent: true; depthWrite: false">
+          <a-circle radius="0.03" segments="24" color="#ff4f81" material="opacity: 0.9" position="0 0 0.001"></a-circle>
+          <a-plane width="0.034" height="0.006" color="#030507" position="0 0 0.002" rotation="0 0 45"></a-plane>
+          <a-plane width="0.034" height="0.006" color="#030507" position="0 0 0.002" rotation="0 0 -45"></a-plane>
+        </a-plane>
+
+        <!-- Big round play button, centred on the video (hidden while playing) -->
+        <a-circle id="arBigPlay" class="clickable" position="0 0 0.02" radius="0.07" segments="32" color="#33e6ff" material="opacity: 0.92"
+                  animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
+          <a-triangle vertex-a="-0.022 0.034 0" vertex-b="-0.022 -0.034 0" vertex-c="0.038 0 0" color="#030507" position="0 0 0.002"></a-triangle>
+        </a-circle>
+
+        <!-- Small pause button, bottom-left of the video (shown while playing) -->
+        <a-circle id="arMiniPause" class="clickable" position="-0.315 -0.15 0.02" radius="0.03" segments="24" color="#030507" material="opacity: 0.65" visible="false">
+          <a-plane width="0.008" height="0.028" color="#a9f6ff" position="-0.009 0 0.002"></a-plane>
+          <a-plane width="0.008" height="0.028" color="#a9f6ff" position="0.009 0 0.002"></a-plane>
+        </a-circle>
+
+        <!-- Progress bar along the bottom of the video (shown once the video has started) -->
+        <a-entity id="arProgress" visible="false">
+          <a-plane position="0 -0.19 0.014" width="0.68" height="0.008" color="#ffffff" material="opacity: 0.3"></a-plane>
+          <a-plane id="arProgFill" position="-0.34 -0.19 0.015" width="0.0001" height="0.008" color="#33e6ff"></a-plane>
+        </a-entity>
+
+        <!-- Directions: the single filled call to action, opens Google Maps -->
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.26 0.02" width="0.72" height="0.075" color="#a9f6ff" material="opacity: 0.8">
+          <a-text id="txtDirections" value="DIRECTIONS" align="center" color="#030507" width="1.4"></a-text>
+          <a-image id="altDirections" width="0.72" height="0.075" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+      </a-entity>
+
+      <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD ================= -->
+      <a-plane class="clickable spot-btn" data-id="ooty_lake" data-icon="wave" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 0">
+        <a-text value="Ooty Lake\n(13 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="pykara" data-icon="drop" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 200">
+        <a-text value="Pykara Lake\n(55 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="rose_garden" data-icon="leaf" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 400">
+        <a-text value="Rose Garden\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="botanical_garden" data-icon="leaf" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 600">
+        <a-text value="Botanical Garden\n(5 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="murugan_temple" data-icon="temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 800">
+        <a-text value="Murugan Temple\n(8 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="govt_museum" data-icon="museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1000">
+        <a-text value="Govt Museum\n(4 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="doddabetta" data-icon="peak" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1200">
+        <a-text value="Doddabetta Peak\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="pine_forest" data-icon="pine" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1400">
+        <a-text value="Pine Forest\n(35 min)" align="center" color="#a9f6ff" width="0.65"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="avalanche" data-icon="drop" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1600">
+        <a-text value="Avalanche Lake\n(1 hr 15 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="mudumalai" data-icon="paw" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.6"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1800">
+        <a-text value="Mudumalai Park\n(1 hr 20 min)" align="center" color="#a9f6ff" width="0.62"></a-text>
+      </a-plane>
+
+    </a-entity>
+  </a-scene>
+
+  <script>
+    // NOTE: lat/lng are APPROXIMATE. Right-click each spot in Google Maps and paste the exact values.
+    // OPTIONAL: add   poster: "ooty/posters/ooty_lake.jpg"   to any place to show a still image on the
+    // video panel before Play (16:9 works best; use a same-origin file or one served with CORS headers).
+    // Without a poster the panel shows the video's first frame, which some phones leave blank until play.
+    //
+    // min / km replace the old `time` text so each language can format them itself ("13 min (2.4 km)" in
+    // English gives exactly the same text as before). i18n holds each place's full title and short card name.
+    // The Tamil and Hindi wording is a first draft: please have a native speaker check it.
+    const PLACES = {
+      ooty_lake: {
+        lat: 11.403, lng: 76.6875, min: 13, km: 2.4,
+        video: "ooty/Ooty_Lake.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse",
+        i18n: {
+          en: { title: "Ooty Lake & Boathouse", short: "Ooty Lake" },
+          ta: { title: "ஊட்டி ஏரி மற்றும் படகு இல்லம்", short: "ஊட்டி ஏரி" },
+          hi: { title: "ऊटी झील और बोट हाउस", short: "ऊटी झील" }
+        }
+      },
+      pykara: {
+        lat: 11.465, lng: 76.595, min: 55, km: 21,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls",
+        i18n: {
+          en: { title: "Pykara Waterfalls & Lake", short: "Pykara Lake" },
+          ta: { title: "பைக்காரா நீர்வீழ்ச்சி மற்றும் ஏரி", short: "பைக்காரா ஏரி" },
+          hi: { title: "पायकारा जलप्रपात और झील", short: "पायकारा झील" }
+        }
+      },
+      rose_garden: {
+        lat: 11.4114, lng: 76.7053, min: 4, km: 0.6,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Rose Garden", short: "Rose Garden" },
+          ta: { title: "அரசு ரோஜா தோட்டம்", short: "ரோஜா தோட்டம்" },
+          hi: { title: "सरकारी गुलाब उद्यान", short: "गुलाब उद्यान" }
+        }
+      },
+      botanical_garden: {
+        lat: 11.4187, lng: 76.7112, min: 5, km: 0.8,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Botanical Garden", short: "Botanical Garden" },
+          ta: { title: "அரசு தாவரவியல் பூங்கா", short: "தாவரவியல் பூங்கா" },
+          hi: { title: "सरकारी वनस्पति उद्यान", short: "वनस्पति उद्यान" }
+        }
+      },
+      murugan_temple: {
+        lat: 11.4096, lng: 76.6868, min: 8, km: 1.4,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty",
+        i18n: {
+          en: { title: "Elk Hill Murugan Temple", short: "Murugan Temple" },
+          ta: { title: "எல்க் ஹில் முருகன் கோயில்", short: "முருகன் கோயில்" },
+          hi: { title: "एल्क हिल मुरुगन मंदिर", short: "मुरुगन मंदिर" }
+        }
+      },
+      govt_museum: {
+        lat: 11.4171, lng: 76.7101, min: 4, km: 0.7,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty",
+        i18n: {
+          en: { title: "Government Museum Ooty", short: "Govt Museum" },
+          ta: { title: "அரசு அருங்காட்சியகம், ஊட்டி", short: "அரசு அருங்காட்சியகம்" },
+          hi: { title: "सरकारी संग्रहालय, ऊटी", short: "सरकारी संग्रहालय" }
+        }
+      },
+      doddabetta: {
+        lat: 11.4, lng: 76.7357, min: 35, km: 9.5,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak",
+        i18n: {
+          en: { title: "Doddabetta Peak Observatory", short: "Doddabetta Peak" },
+          ta: { title: "தொட்டபெட்டா சிகரம் காட்சி முனை", short: "தொட்டபெட்டா சிகரம்" },
+          hi: { title: "दोदाबेट्टा शिखर वेधशाला", short: "दोदाबेट्टा शिखर" }
+        }
+      },
+      pine_forest: {
+        lat: 11.4361, lng: 76.6752, min: 35, km: 10,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty",
+        i18n: {
+          en: { title: "Pine Forest (Shooting Spot)", short: "Pine Forest" },
+          ta: { title: "பைன் காடு (படப்பிடிப்பு இடம்)", short: "பைன் காடு" },
+          hi: { title: "पाइन वन (शूटिंग स्थल)", short: "पाइन वन" }
+        }
+      },
+      avalanche: {
+        lat: 11.2761, lng: 76.5583, min: 75, km: 25,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty",
+        i18n: {
+          en: { title: "Avalanche Lake Checkpoint", short: "Avalanche Lake" },
+          ta: { title: "அவலாஞ்சி ஏரி சோதனைச் சாவடி", short: "அவலாஞ்சி ஏரி" },
+          hi: { title: "अवलांच झील चौकी", short: "अवलांच झील" }
+        }
+      },
+      mudumalai: {
+        lat: 11.5675, lng: 76.533, min: 80, km: 37,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Mudumalai+National+Park",
+        i18n: {
+          en: { title: "Mudumalai Tiger Reserve", short: "Mudumalai Park" },
+          ta: { title: "முதுமலை புலிகள் காப்பகம்", short: "முதுமலை பூங்கா" },
+          hi: { title: "मुदुमलई बाघ अभयारण्य", short: "मुदुमलई उद्यान" }
+        }
+      }
+    };
+
+    // Interface wording per language (draft translations for Tamil and Hindi: please have them checked)
+    const UI = {
+      en: {
+        scanPoint: 'Point camera at the Ooty card', scanLocked: 'Target locked \u2014 tap a landmark',
+        directions: 'Directions', close: 'Close', driveTime: 'Drive time', fromYou: 'From you',
+        straight: 'straight line', min: 'min', hr: 'hr', km: 'km', boot: 'Calibrating AR interface\u2026'
+      },
+      ta: {
+        scanPoint: 'ஊட்டி அட்டையை கேமராவில் காட்டுங்கள்', scanLocked: 'அட்டை கிடைத்தது \u2014 ஓர் இடத்தைத் தொடவும்',
+        directions: 'வழிகள்', close: 'மூடு', driveTime: 'பயண நேரம்', fromYou: 'உங்கள் இடத்திலிருந்து',
+        straight: 'நேர்கோட்டில்', min: 'நிமிடம்', hr: 'மணி', km: 'கி.மீ', boot: 'AR திரையைத் தயார் செய்கிறது\u2026'
+      },
+      hi: {
+        scanPoint: 'कैमरे को ऊटी कार्ड की ओर करें', scanLocked: 'कार्ड मिल गया \u2014 किसी स्थान पर टैप करें',
+        directions: 'दिशा-निर्देश', close: 'बंद करें', driveTime: 'ड्राइव का समय', fromYou: 'आपके स्थान से',
+        straight: 'सीधी रेखा में', min: 'मिनट', hr: 'घंटा', km: 'किमी', boot: 'AR इंटरफ़ेस तैयार हो रहा है\u2026'
+      }
+    };
+
+    // ---- Custom cyan line-icon set for the AR hotspot badges ----
+    const ICON_PATHS = {
+      wave:   '<path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+      drop:   '<path d="M12 3c4 5 6 8.2 6 11.2A6 6 0 1 1 6 14.2C6 11.2 8 8 12 3z"/>',
+      leaf:   '<path d="M4 20c8 0 14-6 14-14 0 0-2 1-5 1C7 7 4 12 4 20z"/><path d="M4 20c0-6 3-9 8-11"/>',
+      temple: '<path d="M12 3l3.2 4H8.8L12 3z"/><path d="M7.5 8h9v3h-9z"/><path d="M6 12h12v7H6z"/><path d="M10 19v-4h4v4"/>',
+      museum: '<path d="M12 3l7.5 4.2H4.5L12 3z"/><path d="M5 9v8M9 9v8M15 9v8M19 9v8"/><path d="M4 19h16"/>',
+      peak:   '<path d="M3 18.5l5.8-9.6 3.4 5 2.6-3.4 6.2 8h-18z"/>',
+      pine:   '<path d="M12 3l3.6 5.4h-2L17 13h-2.6l3.1 5H6.5l3.1-5H7l3.4-4.6h-2L12 3z"/><path d="M11 18h2v3h-2z"/>',
+      paw:    '<circle cx="8" cy="10.5" r="1.7"/><circle cx="16" cy="10.5" r="1.7"/><circle cx="6" cy="6.5" r="1.2"/><circle cx="18" cy="6.5" r="1.2"/><path d="M12 21c-3 0-5.2-1.6-5.2-4.1 0-2.1 2.1-3.7 5.2-3.7s5.2 1.6 5.2 3.7C17.2 19.4 15 21 12 21z"/>'
+    };
+
+    function iconDataUri(pathId) {
+      const inner = ICON_PATHS[pathId] || ICON_PATHS.leaf;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0a1420" stroke-width="1.7" ' +
+                  'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+      return 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+
+    // Give every hotspot a slim cyan edge + a corner emblem carrying its category icon
+    function dressUpHotspots() {
+      document.querySelectorAll('.spot-btn').forEach(el => {
+        const w = parseFloat(el.getAttribute('width'));
+        const h = parseFloat(el.getAttribute('height'));
+        const pos = el.getAttribute('position');
+        const iconKey = el.getAttribute('data-icon') || 'leaf';
+
+        // Thin cyan edge sitting just behind the plate
+        const frame = document.createElement('a-plane');
+        frame.setAttribute('width', (w + 0.01).toFixed(3));
+        frame.setAttribute('height', (h + 0.01).toFixed(3));
+        frame.setAttribute('color', '#33e6ff');
+        frame.setAttribute('material', 'opacity: 0.7');
+        frame.setAttribute('position', `${pos.x} ${pos.y} ${pos.z - 0.004}`);
+        el.parentNode.insertBefore(frame, el);
+
+        // Corner emblem: cyan ring + navy disc + icon glyph
+        const cx = -w / 2 + 0.026;
+        const cy = h / 2 - 0.024;
+
+        const ring = document.createElement('a-ring');
+        ring.setAttribute('radius-inner', '0.018');
+        ring.setAttribute('radius-outer', '0.0215');
+        ring.setAttribute('color', '#33e6ff');
+        ring.setAttribute('position', `${cx} ${cy} 0.002`);
+        el.appendChild(ring);
+
+        const disc = document.createElement('a-circle');
+        disc.setAttribute('radius', '0.018');
+        disc.setAttribute('color', '#a9f6ff');
+        disc.setAttribute('position', `${cx} ${cy} 0.0025`);
+        el.appendChild(disc);
+
+        const icon = document.createElement('a-image');
+        icon.setAttribute('width', '0.026');
+        icon.setAttribute('height', '0.026');
+        icon.setAttribute('position', `${cx} ${cy} 0.003`);
+        icon.setAttribute('transparent', 'true');
+        icon.setAttribute('src', iconDataUri(iconKey));
+        el.appendChild(icon);
+      });
+    }
+
+    const videoEl = document.getElementById('arVideo');
+    const screenGroup = document.getElementById('videoScreenGroup');
+    const arTitle = document.getElementById('arVideoTitle');
+    const arDistanceTab = document.getElementById('arDistanceTab');
+    const pillBody = document.getElementById('pillBody');
+    const pillL = document.getElementById('pillL');
+    const pillR = document.getElementById('pillR');
+    const videoPlane = document.getElementById('videoPlane');
+    const arPoster = document.getElementById('arPoster');
+    const bigPlay = document.getElementById('arBigPlay');
+    const miniPause = document.getElementById('arMiniPause');
+    const arProgress = document.getElementById('arProgress');
+    const progFill = document.getElementById('arProgFill');
+    const arDirectionsBtn = document.getElementById('arDirectionsBtn');
+    const bottomBar = document.getElementById('active-info-bar');
+    const infoTitle = document.getElementById('info-title');
+    const infoTime = document.getElementById('info-time');
+    const bootLoader = document.getElementById('boot-loader');
+    const bootText = document.getElementById('bootText');
+    const txtDirections = document.getElementById('txtDirections');
+    const altTitle = document.getElementById('altTitle');
+    const altDistance = document.getElementById('altDistance');
+    const altDirections = document.getElementById('altDirections');
+    const langButtons = Array.prototype.slice.call(document.querySelectorAll('#lang-toggle button[data-lang]'));
+
+    const sceneEl = document.querySelector('a-scene');
+
+    // Maps URL for the landmark that is currently open (used by the AR Directions button)
+    let currentMapsUrl = '';
+
+    // ---- Language state (English unless the guest has chosen another language before) ----
+    function savedLang() {
+      try {
+        const s = localStorage.getItem('ooty-lang');
+        if (s && UI[s]) return s;
+      } catch (e) { /* storage unavailable: use English */ }
+      return 'en';
+    }
+
+    let LANG = savedLang();
+    let currentId = null;                 // landmark that is open, or null
+    let distState = { kind: 'fixed' };    // fixed value, live route, or straight-line fallback
+    let tracking = false;                 // whether the card is currently tracked
+    let langApplied = false;              // false until setLanguage() has run once
+
+    // Build the icon badges once the scene's entities exist
+    if (sceneEl.hasLoaded) {
+      dressUpHotspots();
+    } else {
+      sceneEl.addEventListener('loaded', dressUpHotspots);
+    }
+
+    // Hide the boot loader once the AR scene has rendered its first frame
+    sceneEl.addEventListener('renderstart', () => {
+      bootLoader.classList.add('hidden');
+    });
+    setTimeout(() => bootLoader.classList.add('hidden'), 4000);
+
+    // Little scale "pop" used for tap feedback on any clickable a-plane
+    function popFeedback(el) {
+      el.removeAttribute('animation__pop');
+      el.setAttribute('animation__pop', {
+        property: 'scale',
+        from: '0.85 0.85 0.85',
+        to: '1 1 1',
+        dur: 220,
+        easing: 'easeOutBack'
+      });
+    }
+
+    // ---- Live distance from the user's current location ----
+    let liveRequestId = 0;
+    let userPos = null;
+    let userPosTime = 0;
+    const POS_MAX_AGE = 60000; // reuse a location fix for 60 s
+
+    function getUserPosition() {
+      if (userPos && Date.now() - userPosTime < POS_MAX_AGE) return Promise.resolve(userPos);
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            userPosTime = Date.now();
+            resolve(userPos);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      });
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    async function fetchRoute(from, to) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+                    from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat + '?overview=false';
+        const res = await fetch(url, { signal: ctrl.signal });
+        const j = await res.json();
+        if (!j.routes || !j.routes.length) throw new Error('no route');
+        return { km: j.routes[0].distance / 1000, min: Math.round(j.routes[0].duration / 60) };
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // ---- Language helpers (in English these give exactly the same text as before) ----
+    function ui(key) { return (UI[LANG] || UI.en)[key]; }
+    function pt(p, key) { return (p.i18n[LANG] || p.i18n.en)[key]; }
+
+    function fmtDuration(min) {
+      if (min < 60) return min + ' ' + ui('min');
+      const h = Math.floor(min / 60), m = min % 60;
+      return h + ' ' + ui('hr') + (m ? ' ' + m + ' ' + ui('min') : '');
+    }
+
+    function fmtKm(km) {
+      return (km < 10 ? km.toFixed(1) : String(Math.round(km))) + ' ' + ui('km');
+    }
+
+    function distanceText() {
+      const p = PLACES[currentId];
+      if (!p) return '';
+      if (distState.kind === 'live') return ui('fromYou') + ' \u00B7 ' + fmtDuration(distState.min) + ' (' + fmtKm(distState.km) + ')';
+      if (distState.kind === 'line') return ui('fromYou') + ' \u00B7 ~' + fmtKm(distState.km) + ' ' + ui('straight');
+      return ui('driveTime') + ' \u00B7 ' + fmtDuration(p.min) + ' (' + fmtKm(p.km) + ')';
+    }
+
+    // ---- Distance pill: a capsule built from one plane and two end circles, sized to fit its text ----
+    const PILL_H = 0.038;        // pill height, in panel units
+    const PILL_MIN_W = 0.2;
+    const PILL_MAX_W = 0.56;     // stays clear of the close icon in the header corner
+    const PILL_PAD = 0.07;       // total horizontal padding around the text
+    let pillText = 'Drive time \u00B7 --';
+
+    function applyPill(pw) {
+      const r = PILL_H / 2;
+      pillBody.setAttribute('width', Math.max(0.001, pw - PILL_H).toFixed(3));
+      pillBody.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0');
+      pillL.setAttribute('position', r.toFixed(3) + ' 0 0');
+      pillR.setAttribute('position', (pw - r).toFixed(3) + ' 0 0');
+      arDistanceTab.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0.002');
+      altDistance.setAttribute('position', (pw / 2).toFixed(3) + ' 0 0.003');
+    }
+
+    // Measure the rendered text (two frames later, once the text geometry has updated) and size the pill to it.
+    // If the measurement isn't available, fall back to an estimate based on the number of characters.
+    function fitPill() {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        let w = 0;
+        try {
+          const mesh = arDistanceTab.getObject3D('text');
+          if (mesh && mesh.geometry && mesh.geometry.layout) {
+            w = mesh.geometry.layout.width * Math.abs(mesh.scale.x);
+          }
+        } catch (e) { /* fall through to the estimate */ }
+        if (!w || !isFinite(w)) w = pillText.length * 0.015;
+        applyPill(Math.min(PILL_MAX_W, Math.max(PILL_MIN_W, w + PILL_PAD)));
+      }));
+    }
+
+    // ================= TAMIL / HINDI AR TEXT =================
+    // a-text cannot shape Tamil or Devanagari. In those languages the AR text is drawn by the browser onto a
+    // canvas and shown on an <a-image>; in English the original a-text is used, exactly as before.
+    const TEX_PPU = 2000;   // canvas pixels per world unit
+
+    function fontFor(kind) {
+      if (LANG === 'ta') return "'Noto Sans Tamil', sans-serif";
+      if (LANG === 'hi') return "'Noto Sans Devanagari', sans-serif";
+      return kind === 'head' ? "'Orbitron', sans-serif" : "'Rajdhani', sans-serif";
+    }
+
+    function loadFont(family, weight, text) {
+      if (!document.fonts || !document.fonts.load) return Promise.resolve();
+      return document.fonts.load(weight + ' 40px ' + family, text).catch(() => {});
+    }
+
+    // o: { text, kind: 'head'|'body', color, size (fraction of line height), pad (world units per side), align }
+    // Resolves to the drawn text width in world units, or null if a newer render replaced this one.
+    async function renderLabel(el, o) {
+      const rid = (el._rid = (el._rid || 0) + 1);
+      const W = parseFloat(el.getAttribute('width'));
+      const H = parseFloat(el.getAttribute('height'));
+      const cw = Math.max(8, Math.round(W * TEX_PPU));
+      const ch = Math.max(8, Math.round(H * TEX_PPU));
+      const lines = String(o.text).split('\n');
+      const family = fontFor(o.kind);
+      const weight = o.kind === 'head' ? 600 : 700;
+
+      await loadFont(family, weight, o.text);
+      if (rid !== el._rid) return null;
+
+      const cv = document.createElement('canvas');
+      cv.width = cw;
+      cv.height = ch;
+      const ctx = cv.getContext('2d');
+      const slot = ch / lines.length;
+      const padPx = (o.pad == null ? 0.02 : o.pad) * TEX_PPU;
+      const maxW = cw - 2 * padPx;
+
+      const widest = p => {
+        ctx.font = weight + ' ' + p + 'px ' + family;
+        return Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
+      };
+
+      let px = slot * (o.size || 0.6);
+      let tw = widest(px);
+      while (tw > maxW && px > 10) { px *= 0.94; tw = widest(px); }
+
+      ctx.font = weight + ' ' + px + 'px ' + family;
+      ctx.fillStyle = o.color;
+      ctx.textBaseline = 'middle';
+      let tx;
+      if (o.align === 'left') { ctx.textAlign = 'left'; tx = padPx; }
+      else { ctx.textAlign = 'center'; tx = cw / 2; }
+      lines.forEach((l, i) => ctx.fillText(l, tx, slot * (i + 0.5) + px * 0.04));
+
+      el.setAttribute('src', cv.toDataURL('image/png'));
+      el.setAttribute('visible', 'true');
+      return tw / TEX_PPU;
+    }
+
+    // Show one piece of AR text: the a-text in English, the canvas picture in Tamil / Hindi.
+    function showText(textEl, imgEl, enValue, opts) {
+      if (LANG === 'en') {
+        imgEl._rid = (imgEl._rid || 0) + 1;      // cancel any render still in flight
+        imgEl.setAttribute('visible', 'false');
+        textEl.setAttribute('visible', 'true');
+        textEl.setAttribute('value', enValue);
+        return Promise.resolve(null);
+      }
+      textEl.setAttribute('visible', 'false');
+      return renderLabel(imgEl, opts);
+    }
+
+    // Draws the distance line: AR pill (sized to its text) and the dock
+    function renderDistance() {
+      const text = distanceText();
+      pillText = text;
+      infoTime.innerText = text;
+      if (LANG === 'en') {
+        showText(arDistanceTab, altDistance, text, null);
+        fitPill();
+      } else {
+        arDistanceTab.setAttribute('visible', 'false');
+        renderLabel(altDistance, { text: text, kind: 'body', color: '#33e6ff', size: 0.62, pad: PILL_PAD / 2 }).then(w => {
+          if (w) applyPill(Math.min(PILL_MAX_W, Math.max(PILL_MIN_W, w + PILL_PAD)));
+        });
+      }
+    }
+
+    // Title (AR header and dock) plus distance for the open landmark
+    function renderPlace() {
+      const p = PLACES[currentId];
+      if (!p) return;
+      const title = pt(p, 'title');
+      showText(arTitle, altTitle, title, { text: title, kind: 'head', color: '#a9f6ff', size: 0.5, pad: 0, align: 'left' });
+      infoTitle.innerText = title;
+      renderDistance();
+    }
+
+    function renderHotspotLabels() {
+      document.querySelectorAll('.spot-btn').forEach(btn => {
+        const p = PLACES[btn.getAttribute('data-id')];
+        const txt = btn.querySelector('a-text');
+        const alt = btn.querySelector('.hs-alt');
+        if (!p || !txt || !alt) return;
+        const label = pt(p, 'short') + '\n(' + fmtDuration(p.min) + ')';
+        showText(txt, alt, label, { text: label, kind: 'body', color: '#a9f6ff', size: 0.68, pad: 0.05 });
+      });
+    }
+
+    function renderDirectionsLabel() {
+      const t = LANG === 'en' ? 'DIRECTIONS' : ui('directions');
+      showText(txtDirections, altDirections, t, { text: t, kind: 'body', color: '#030507', size: 0.62, pad: 0.03 });
+    }
+
+    // Each hotspot gets a hidden <a-image> beside its a-text, used only in Tamil / Hindi
+    function initHotspotAlts() {
+      document.querySelectorAll('.spot-btn').forEach(btn => {
+        const alt = document.createElement('a-image');
+        alt.classList.add('hs-alt');
+        alt.setAttribute('width', btn.getAttribute('width'));
+        alt.setAttribute('height', btn.getAttribute('height'));
+        alt.setAttribute('position', '0 0 0.002');
+        alt.setAttribute('visible', 'false');
+        btn.appendChild(alt);
+      });
+    }
+
+    function updateScanText() {
+      scanPromptText.innerText = tracking ? ui('scanLocked') : ui('scanPoint');
+    }
+
+    function setLanguage(lang) {
+      if (!UI[lang]) lang = 'en';
+      const firstRun = !langApplied;
+      langApplied = true;
+      LANG = lang;
+      try { localStorage.setItem('ooty-lang', lang); } catch (e) { /* ignore */ }
+      document.documentElement.lang = lang;
+      langButtons.forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)));
+
+      bootText.textContent = ui('boot');
+      updateScanText();
+
+      // On the very first run in English the AR text is already correct, so leave it alone
+      if (!(firstRun && lang === 'en')) {
+        renderHotspotLabels();
+        renderDirectionsLabel();
+      }
+      if (currentId) renderPlace();
+    }
+
+    // Shows the fixed value first (set in the click handler), then swaps in the live one
+    async function updateLiveDistance(id) {
+      const data = PLACES[id];
+      if (!data || data.lat == null) return;
+      const reqId = ++liveRequestId;
+
+      const from = await getUserPosition();
+      if (!from || reqId !== liveRequestId) return; // denied, failed, or user moved on
+
+      const to = { lat: data.lat, lng: data.lng };
+      let next;
+      try {
+        const r = await fetchRoute(from, to);
+        next = { kind: 'live', min: r.min, km: r.km };
+      } catch (e) {
+        next = { kind: 'line', km: haversineKm(from, to) };
+      }
+      if (reqId !== liveRequestId) return;
+      distState = next;
+      renderDistance();
+    }
+
+    // Attach click listeners to landmark buttons
+    document.querySelectorAll('.spot-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const data = PLACES[id];
+        if (!data) return;
+
+        popFeedback(btn);
+
+        // New place: reset the player. "#t=0.1" asks the browser to show a frame near the start while paused.
+        videoEl.pause();
+        hasStarted = false;
+        videoEl.src = data.video + (data.video.indexOf('#') === -1 ? '#t=0.1' : '');
+        videoEl.load();
+
+        posterOn = !!data.poster;
+        if (data.poster) arPoster.setAttribute('src', data.poster);
+        updateProgress();
+        syncPlayer();
+
+        currentId = id;
+        distState = { kind: 'fixed' };
+        renderPlace();
+        screenGroup.setAttribute('visible', 'true');
+        screenGroup.removeAttribute('animation__show');
+        screenGroup.setAttribute('animation__show', {
+          property: 'scale',
+          from: '0.05 0.05 0.05',
+          to: '1 1 1',
+          dur: 420,
+          easing: 'easeOutElastic'
+        });
+
+        currentMapsUrl = data.maps;
+
+        bottomBar.classList.add('active');
+        document.body.classList.add('spot-open');
+
+        updateLiveDistance(id);
+      });
+    });
+
+    // ---- Player UI: poster, round play button, small pause button, progress bar ----
+    let hasStarted = false;   // true once the current video has been played at least once
+    let posterOn = false;     // true when the current place supplies a poster image
+    const PROG_W = 0.68;      // full width of the progress bar
+    const PROG_X0 = -0.34;    // x position of its left end
+
+    function updateProgress() {
+      const d = videoEl.duration;
+      const f = (d && isFinite(d)) ? Math.min(1, videoEl.currentTime / d) : 0;
+      const w = Math.max(0.0001, PROG_W * f);
+      progFill.setAttribute('width', w.toFixed(4));
+      progFill.setAttribute('position', (PROG_X0 + w / 2).toFixed(4) + ' -0.19 0.015');
+    }
+
+    // One place decides what is visible: big play when paused, small pause while playing,
+    // progress bar once started, poster only before the first play.
+    function syncPlayer() {
+      const playing = !videoEl.paused && !videoEl.ended;
+      bigPlay.setAttribute('visible', !playing);
+      miniPause.setAttribute('visible', playing);
+      arProgress.setAttribute('visible', hasStarted);
+      arPoster.setAttribute('visible', posterOn && !hasStarted);
+    }
+
+    function togglePlay(feedbackEl) {
+      if (feedbackEl) popFeedback(feedbackEl);
+      if (videoEl.paused) {
+        videoEl.muted = false;
+        videoEl.play().catch(() => {
+          videoEl.muted = true;
+          videoEl.play().catch(() => {});
+        });
+      } else {
+        videoEl.pause();
+      }
+    }
+
+    videoEl.addEventListener('play', () => { hasStarted = true; syncPlayer(); });
+    videoEl.addEventListener('pause', syncPlayer);
+    videoEl.addEventListener('timeupdate', updateProgress);
+
+    // Tapping the round play button, the small pause button, or anywhere on the video toggles playback
+    bigPlay.addEventListener('click', () => togglePlay(bigPlay));
+    miniPause.addEventListener('click', () => togglePlay(miniPause));
+    videoPlane.addEventListener('click', () => togglePlay(null));
+
+    // Set the panel's starting layout once the scene's entities exist
+    function initPanel() {
+      applyPill(0.4);
+      updateProgress();
+      syncPlayer();
+    }
+    if (sceneEl.hasLoaded) {
+      initPanel();
+    } else {
+      sceneEl.addEventListener('loaded', initPanel);
+    }
+
+    // AR Directions Button Handler — opens Google Maps for the open landmark
+    arDirectionsBtn.addEventListener('click', () => {
+      popFeedback(arDirectionsBtn);
+      if (currentMapsUrl) window.open(currentMapsUrl, '_blank');
+    });
+
+    // Close button — animate the billboard shrinking away before hiding it
+    function closeActiveSpot() {
+      liveRequestId++;
+      videoEl.pause();
+
+      screenGroup.removeAttribute('animation__hide');
+      screenGroup.setAttribute('animation__hide', {
+        property: 'scale',
+        to: '0.01 0.01 0.01',
+        dur: 220,
+        easing: 'easeInBack'
+      });
+      setTimeout(() => screenGroup.setAttribute('visible', 'false'), 220);
+
+      bottomBar.classList.remove('active');
+      document.body.classList.remove('spot-open');
+      hasStarted = false;
+      syncPlayer();
+      currentId = null;
+    }
+
+    document.getElementById('arCloseBtn').addEventListener('click', () => {
+      popFeedback(document.getElementById('arCloseBtn'));
+      closeActiveSpot();
+    });
+
+    // Target tracking events
+    const cardTarget = document.getElementById('cardTarget');
+    const scanPrompt = document.getElementById('scanPrompt');
+    const scanPromptText = document.getElementById('scanPromptText');
+
+    cardTarget.addEventListener("targetFound", () => {
+      tracking = true;
+      updateScanText();
+      scanPrompt.classList.remove('locked');
+      void scanPrompt.offsetWidth;
+      scanPrompt.classList.add('locked');
+    });
+
+    cardTarget.addEventListener("targetLost", () => {
+      tracking = false;
+      updateScanText();
+      scanPrompt.classList.remove('locked');
+      videoEl.pause();
+    });
+
+    // Language toggle wiring, then start in the saved language (English by default)
+    langButtons.forEach(b => {
+      b.addEventListener('click', () => setLanguage(b.getAttribute('data-lang')));
+    });
+    initHotspotAlts();
+    setLanguage(LANG);
+  </script>
+</body>
+</html>
