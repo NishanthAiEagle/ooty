@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Ooty AR Smart Concierge</title>
+
+  <!-- A-Frame & MindAR -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+  <!-- Type: Orbitron + Rajdhani for English, Noto Sans Tamil / Devanagari for the other languages.
+       Both the HTML overlay and the canvas-drawn AR labels use these same families. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+Tamil:wght@500;600;700&family=Noto+Sans+Devanagari:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* HUD palette: void navy, electric cyan primary, violet secondary, magenta alert */
+      --void:        #05080f;
+      --panel:       #0a1420;
+      --panel-2:     #0c1a2a;
+      --cyan:        #33e6ff;
+      --cyan-soft:   #a9f6ff;
+      --cyan-dim:    #1c7f94;
+      --violet:      #8c6bff;
+      --violet-soft: #c9bbff;
+      --magenta:     #ff4f81;
+      --ice:         #eaf6ff;
+      --ink:         #030507;
+
+      /* Font stacks: Latin faces first, then per-glyph fallbacks for Tamil and Devanagari */
+      --font-head: 'Orbitron', 'Noto Sans Tamil', 'Noto Sans Devanagari', sans-serif;
+      --font-body: 'Rajdhani', 'Noto Sans Tamil', 'Noto Sans Devanagari', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: var(--font-body);
+      background-color: #000;
+      color: var(--ice);
+    }
+
+    .hud-label { font-family: var(--font-head); }
+
+    /* Letter-spacing breaks the joining of Tamil and Devanagari letters, so switch it off there */
+    html[lang="ta"] body *, html[lang="hi"] body * { letter-spacing: normal !important; }
+
+    /* PREVENTS RAW HTML VIDEO FROM RENDERING ON SCREEN */
+    video#arVideo {
+      display: none !important;
+      visibility: hidden !important;
+      position: absolute !important;
+      top: -99999px !important;
+      left: -99999px !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    /* Subtle scanline + vignette so UI reads over any camera background */
+    #vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+      background:
+        linear-gradient(to bottom, rgba(2,6,12,0.6) 0%, rgba(2,6,12,0) 16%, rgba(2,6,12,0) 78%, rgba(2,6,12,0.65) 100%);
+    }
+
+    #scan-sweep {
+      position: fixed;
+      inset: 0;
+      z-index: 9997;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.5;
+    }
+
+    #scan-sweep::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(to bottom, rgba(51,230,255,0) 0%, rgba(51,230,255,0.06) 50%, rgba(51,230,255,0) 100%);
+      animation: sweepDown 5s linear infinite;
+    }
+
+    @keyframes sweepDown {
+      0%   { top: -120px; }
+      100% { top: 100%; }
+    }
+
+    /* Screen UI Overlay */
+    #ui-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      pointer-events: none;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+      opacity: 0;
+      animation: uiFadeIn 0.8s ease forwards 0.2s;
+    }
+
+    @keyframes uiFadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Outdoor readability: near-solid backing (was 0.7) so bright sky or sun can't wash the text out */
+    .scan-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(10,20,32,0.92);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid var(--cyan-dim);
+      color: var(--cyan-soft);
+      padding: 9px 20px 9px 16px;
+      border-radius: 999px;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      box-shadow: 0 0 0 rgba(51,230,255,0);
+      transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+      animation: pillBreathe 2.4s ease-in-out infinite;
+    }
+
+    .scan-pill svg { flex: none; }
+
+    @keyframes pillBreathe {
+      0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 rgba(51,230,255,0.0); border-color: var(--cyan-dim); }
+      50%      { box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 18px rgba(51,230,255,0.55); border-color: var(--cyan); }
+    }
+
+    .scan-pill.locked {
+      animation: lockedPulse 1s ease-out 1;
+      border-color: var(--cyan);
+      color: var(--ice);
+    }
+
+    @keyframes lockedPulse {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.12); box-shadow: 0 0 28px rgba(51,230,255,0.75); }
+      65%  { transform: scale(0.97); }
+      100% { transform: scale(1); }
+    }
+
+    .scan-pill::after {
+      content: "";
+      position: absolute;
+      top: 0; left: -60%;
+      width: 40%; height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(169,246,255,0.35), transparent);
+      transform: skewX(-20deg);
+      animation: sheen 3.2s ease-in-out infinite;
+    }
+
+    @keyframes sheen {
+      0%   { left: -60%; }
+      60%  { left: 130%; }
+      100% { left: 130%; }
+    }
+
+    .pill-rule {
+      width: 40px;
+      height: 1px;
+      margin-top: 10px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.6;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Hide the scan pill while a landmark is open so it never shows through the dock */
+    body.spot-open .scan-pill,
+    body.spot-open .pill-rule {
+      opacity: 0;
+    }
+
+    /* Language toggle (and captions switch). Always visible, 40px-high tap targets. */
+    #lang-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+      padding: 4px;
+      background: rgba(9,17,27,0.94);
+      border: 1px solid rgba(51,230,255,0.45);
+      border-radius: 999px;
+      pointer-events: auto;
+    }
+
+    #lang-toggle button {
+      min-width: 52px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--cyan-soft);
+      font-family: var(--font-body);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    #lang-toggle button[aria-pressed="true"] { background: var(--cyan); color: var(--ink); }
+    #lang-toggle button:focus-visible { outline: 2px solid var(--ice); outline-offset: 1px; }
+    #lang-toggle button[hidden] { display: none; }
+    #lang-toggle #cc-btn { margin-left: 4px; border: 1px solid rgba(169,246,255,0.4); }
+
+    /* Captions for the (muted by default) videos, drawn in HTML so Tamil and Hindi shape correctly */
+    #caption-bar {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 184px); /* sits just above the dock */
+      max-width: 420px;
+      margin: 0 auto;
+      z-index: 9999;
+      pointer-events: none;
+      text-align: center;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 17px;
+      line-height: 1.45;
+      color: #fff;
+      background: rgba(3,5,7,0.92);
+      border-radius: 6px;
+      padding: 8px 12px;
+      white-space: pre-line;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    #caption-bar.show { opacity: 1; }
+
+    /* Screen fallback dock for Maps navigation — HUD target-lock panel (two rows) */
+    #active-info-bar {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); /* clears the browser toolbar */
+      left: 16px;
+      right: 16px;
+      max-width: 420px;
+      margin: 0 auto;
+      background: rgba(9,17,27,0.94);   /* was 0.5: near-solid for outdoor readability */
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(51,230,255,0.55);
+      border-radius: 4px;
+      padding: 14px 16px;
+      display: flex;
+      flex-wrap: wrap;              /* allows the second row */
+      align-items: center;
+      gap: 12px;
+      pointer-events: none;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.6), 0 0 22px rgba(51,230,255,0.12);
+      opacity: 0;
+      transform: translateY(60px) scale(0.96);
+      transition: transform 0.45s cubic-bezier(.34,1.56,.64,1), opacity 0.35s ease;
+    }
+
+    #active-info-bar.active {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    /* Targeting-reticle corner brackets on the lock panel */
+    .corner {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid var(--cyan);
+      opacity: 0.85;
+    }
+    .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+    .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    .info-text { flex: 1; min-width: 0; order: 1; }
+
+    /* Titles may wrap to two lines: Tamil and Hindi names are longer than the English ones */
+    #info-title {
+      color: var(--ice);
+      font-family: var(--font-head);
+      font-weight: 600;
+      font-size: 13.5px;
+      letter-spacing: 0.3px;
+      line-height: 1.3;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    html[lang="ta"] #info-title, html[lang="hi"] #info-title { line-height: 1.5; font-size: 14.5px; }
+
+    #info-time {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      color: var(--cyan-soft);
+    }
+
+    .dock-divider { display: none; }
+
+    .btn-maps {
+      order: 3;
+      flex: 1 1 100%;               /* full-width second row */
+      justify-content: center;
+      background: var(--cyan);
+      color: var(--ink);
+      text-decoration: none;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      padding: 12px 14px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+    }
+
+    .btn-maps svg { flex: none; }
+
+    .btn-maps:active { transform: scale(0.97); }
+
+    .btn-maps:hover {
+      background: var(--cyan-soft);
+      box-shadow: 0 4px 16px rgba(51,230,255,0.55);
+    }
+
+    .btn-close {
+      order: 2;
+      background: transparent;
+      color: var(--cyan-soft);
+      border: 1px solid rgba(169,246,255,0.4);
+      border-radius: 4px;
+      width: 28px;
+      height: 28px;
+      flex: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .btn-close:hover { background: rgba(255,79,129,0.12); border-color: var(--magenta); color: var(--magenta); }
+    .btn-close:active { transform: scale(0.88); }
+
+    /* Boot loader — radar sweep instead of a generic spinner */
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 42%, #0b1c2c 0%, #030509 78%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 10000;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #boot-loader::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(51,230,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(51,230,255,0.06) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle at 50% 42%, black, transparent 70%);
+    }
+
+    #boot-loader.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-radar {
+      width: 54px;
+      height: 54px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .loader-radar svg {
+      width: 100%;
+      height: 100%;
+      animation: spin 1.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #boot-loader span {
+      position: relative;
+      z-index: 1;
+      color: var(--cyan-soft);
+      font-family: var(--font-head);
+      font-size: 11.5px;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+
+    /* Reduced motion: no idle animation. Motion that answers a tap is kept, but made instant in JS. */
+    @media (prefers-reduced-motion: reduce) {
+      #scan-sweep { display: none; }
+      .scan-pill, .scan-pill.locked { animation: none; }
+      .scan-pill::after { display: none; }
+      #ui-container { animation: none; opacity: 1; }
+      #active-info-bar { transform: none; transition: opacity 0.2s ease; }
+      #active-info-bar.active { transform: none; }
+      .loader-radar svg { animation-duration: 6s; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Lightweight boot loader so the first paint isn't a blank black screen -->
+  <div id="boot-loader">
+    <div class="loader-radar">
+      <svg viewBox="0 0 54 54" fill="none">
+        <circle cx="27" cy="27" r="23" stroke="#1c7f94" stroke-width="1.2" opacity="0.5"/>
+        <circle cx="27" cy="27" r="16" stroke="#1c7f94" stroke-width="1" opacity="0.35"/>
+        <path d="M27 27L27 4A23 23 0 0 1 46.9 16.5L27 27Z" fill="#33e6ff" opacity="0.35"/>
+        <circle cx="27" cy="27" r="23" stroke="#33e6ff" stroke-width="1.4" stroke-dasharray="8 130" stroke-linecap="round"/>
+        <circle cx="27" cy="27" r="2.4" fill="#33e6ff"/>
+      </svg>
+    </div>
+    <span id="bootText">Calibrating AR interface&hellip;</span>
+  </div>
+
+  <div id="scan-sweep"></div>
+  <div id="vignette"></div>
+
+  <div id="ui-container">
+    <div class="scan-pill" id="scanPrompt">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <path d="M17.5 14v3.5M15.5 15.5h4"/>
+      </svg>
+      <span id="scanPromptText">Point camera at the Ooty card</span>
+    </div>
+    <div class="pill-rule"></div>
+
+    <!-- Language toggle; the CC button only appears when the open video has captions -->
+    <div id="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ta" lang="ta" aria-pressed="false">தமிழ்</button>
+      <button type="button" data-lang="hi" lang="hi" aria-pressed="false">हिन्दी</button>
+      <button type="button" id="cc-btn" aria-pressed="true" aria-label="Captions" hidden>CC</button>
+    </div>
+
+    <!-- Screen Navigation Dock (two rows: title/time/close, then full-width Directions) -->
+    <div id="active-info-bar">
+      <span class="corner corner-tl"></span>
+      <span class="corner corner-tr"></span>
+      <span class="corner corner-bl"></span>
+      <span class="corner corner-br"></span>
+      <div class="info-text">
+        <div id="info-title">Location Name</div>
+        <div id="info-time">Drive time &middot; --</div>
+      </div>
+      <div class="dock-divider"></div>
+      <a id="mapsLink" href="#" target="_blank" rel="noopener" class="btn-maps">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M15 9l-2.2 5.8L9 17l2.2-5.8L15 9z" fill="currentColor" stroke="none"/>
+        </svg>
+        <span id="mapsLabel">Directions</span>
+      </a>
+      <button class="btn-close" onclick="closeActiveSpot()" aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="caption-bar" aria-live="off"></div>
+
+  <!-- MindAR Scene -->
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets/card.mind; autoStart: true; filterMinCF:0.0001; filterBeta: 0.001;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <!-- ALL MEDIA TEXTURES DECLARED HERE -->
+    <a-assets>
+      <img id="pinIcon" src="https://cdn-icons-png.flaticon.com/512/684/684908.png" crossorigin="anonymous">
+      <video id="arVideo"
+             crossOrigin="anonymous"
+             playsinline
+             webkit-playsinline
+             preload="auto"
+             loop
+             muted></video>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable">
+    </a-camera>
+
+    <!-- Target Entity -->
+    <a-entity id="cardTarget" mindar-image-target="targetIndex: 0">
+
+      <!-- ================= 1. THE FLOATING BILLBOARD SCREEN (frameless HUD panel) =================
+           All AR text is an <a-image class="ar-label"> whose picture is drawn from a canvas by renderLabel().
+           The browser shapes the text, so Tamil and Devanagari display correctly (a-text cannot do that).
+           Backing plates are near-solid so the text stays readable in bright sun. -->
+      <a-entity id="videoScreenGroup" position="0 0.65 0.12" rotation="15 0 0" scale="0.01 0.01 0.01" visible="false">
+
+        <!-- Glass backing plate (extended to cover the Directions row), near-solid -->
+        <a-plane position="0 -0.0935 -0.012" width="0.74" height="0.715" color="#0a1420" material="opacity: 0.95; roughness: 0.9; metalness: 0.3"></a-plane>
+
+        <!-- Thin cyan edge -->
+        <a-plane position="0 -0.0935 -0.013" width="0.744" height="0.719" color="#33e6ff" material="opacity: 0.85"></a-plane>
+
+        <!-- Video Surface, flush edge-to-edge -->
+        <a-video id="videoPlane" src="#arVideo" width="0.72" height="0.405" position="0 0 0.005" material="shader: flat;"></a-video>
+
+        <!-- Header Banner -->
+        <a-plane position="0 0.2325 0.01" width="0.72" height="0.06" color="#0c1a2a" material="opacity: 0.97">
+          <a-image id="lblTitle" class="ar-label" width="0.72" height="0.06" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+        <a-plane position="0 0.2035 0.011" width="0.72" height="0.004" color="#33e6ff" material="opacity: 0.95"></a-plane>
+
+        <!-- Dynamic AR PLAY / PAUSE Toggle Button -->
+        <a-plane id="arPlayPauseBtn" class="clickable" position="-0.15 -0.25 0.02" width="0.42" height="0.07" color="#33e6ff" material="opacity: 1"
+                 animation__idle="property: scale; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine; to: 1.04 1.04 1.04">
+          <a-image id="lblPlay" class="ar-label" width="0.42" height="0.07" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+
+        <!-- Close Button -->
+        <a-plane id="arCloseBtn" class="clickable" position="0.23 -0.25 0.02" width="0.26" height="0.07" color="#ff4f81" material="opacity: 1">
+          <a-image id="lblClose" class="ar-label" width="0.26" height="0.07" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+
+        <!-- Distance Tab — sits right below the Play/Close row -->
+        <a-plane id="arDistanceTabBg" position="0 -0.3275 0.01" width="0.72" height="0.055" color="#0c1a2a" material="opacity: 0.97">
+          <a-image id="lblDistance" class="ar-label" width="0.72" height="0.055" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+
+        <!-- Directions Button — full-width third row, opens Google Maps -->
+        <a-plane id="arDirectionsBtn" class="clickable" position="0 -0.405 0.02" width="0.72" height="0.06" color="#a9f6ff" material="opacity: 1">
+          <a-image id="lblDirections" class="ar-label" width="0.72" height="0.06" position="0 0 0.002" visible="false"></a-image>
+        </a-plane>
+      </a-entity>
+
+      <!-- ================= 2. INTERACTIVE HOTSPOT BUTTONS ON CARD =================
+           Plates are near-solid (was 0.6). Each carries an .hs-label image filled in by renderHotspotLabels(). -->
+      <a-plane class="clickable spot-btn" data-id="ooty_lake" data-icon="wave" position="-0.04 0.18 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 0">
+        <a-image class="ar-label hs-label" width="0.26" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="pykara" data-icon="drop" position="-0.52 0.16 0.03" width="0.28" height="0.08" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 200">
+        <a-image class="ar-label hs-label" width="0.28" height="0.08" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="rose_garden" data-icon="leaf" position="-0.32 -0.10 0.03" width="0.25" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 400">
+        <a-image class="ar-label hs-label" width="0.25" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="botanical_garden" data-icon="leaf" position="-0.33 -0.22 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 600">
+        <a-image class="ar-label hs-label" width="0.27" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="murugan_temple" data-icon="temple" position="-0.28 -0.38 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 800">
+        <a-image class="ar-label hs-label" width="0.27" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="govt_museum" data-icon="museum" position="0.21 0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1000">
+        <a-image class="ar-label hs-label" width="0.28" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="doddabetta" data-icon="peak" position="0.38 -0.08 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1200">
+        <a-image class="ar-label hs-label" width="0.28" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="pine_forest" data-icon="pine" position="0.28 -0.38 0.03" width="0.26" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1400">
+        <a-image class="ar-label hs-label" width="0.26" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="avalanche" data-icon="drop" position="0.55 -0.01 0.03" width="0.27" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1600">
+        <a-image class="ar-label hs-label" width="0.27" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+      <a-plane class="clickable spot-btn" data-id="mudumalai" data-icon="paw" position="0.52 0.28 0.03" width="0.28" height="0.07" color="#0a1420" material="opacity: 0.94"
+               animation__pulse="property: scale; dir: alternate; dur: 1600; loop: true; easing: easeInOutSine; to: 1.06 1.06 1.06; delay: 1800">
+        <a-image class="ar-label hs-label" width="0.28" height="0.07" position="0 0 0.002" visible="false"></a-image>
+      </a-plane>
+
+    </a-entity>
+  </a-scene>
+
+  <script>
+    // NOTE: lat/lng are APPROXIMATE. Right-click each spot in Google Maps and paste the exact values.
+    //
+    // Each place holds numbers (min, km) so every language can format them itself, and an i18n block with
+    // its full title (panel and dock) and a short name (card hotspot). The Tamil and Hindi wording is a first
+    // draft: please have a native speaker check it before guests see it.
+    //
+    // OPTIONAL captions: add   captions: { en: "ooty/captions/ooty_lake.en.vtt", ta: "...ta.vtt", hi: "...hi.vtt" }
+    // to a place. Captions appear over the video in the guest's language (English if theirs is missing).
+    const PLACES = {
+      ooty_lake: {
+        lat: 11.403, lng: 76.6875, min: 13, km: 2.4,
+        video: "ooty/Ooty_Lake.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Ooty+Lake+Boathouse",
+        i18n: {
+          en: { title: "Ooty Lake & Boathouse", short: "Ooty Lake" },
+          ta: { title: "ஊட்டி ஏரி மற்றும் படகு இல்லம்", short: "ஊட்டி ஏரி" },
+          hi: { title: "ऊटी झील और बोट हाउस", short: "ऊटी झील" }
+        }
+      },
+      pykara: {
+        lat: 11.465, lng: 76.595, min: 55, km: 21,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pykara+Waterfalls",
+        i18n: {
+          en: { title: "Pykara Waterfalls & Lake", short: "Pykara Lake" },
+          ta: { title: "பைக்காரா நீர்வீழ்ச்சி மற்றும் ஏரி", short: "பைக்காரா ஏரி" },
+          hi: { title: "पायकारा जलप्रपात और झील", short: "पायकारा झील" }
+        }
+      },
+      rose_garden: {
+        lat: 11.4114, lng: 76.7053, min: 4, km: 0.6,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Rose+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Rose Garden", short: "Rose Garden" },
+          ta: { title: "அரசு ரோஜா தோட்டம்", short: "ரோஜா தோட்டம்" },
+          hi: { title: "सरकारी गुलाब उद्यान", short: "गुलाब उद्यान" }
+        }
+      },
+      botanical_garden: {
+        lat: 11.4187, lng: 76.7112, min: 5, km: 0.8,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Botanical+Garden+Ooty",
+        i18n: {
+          en: { title: "Government Botanical Garden", short: "Botanical Garden" },
+          ta: { title: "அரசு தாவரவியல் பூங்கா", short: "தாவரவியல் பூங்கா" },
+          hi: { title: "सरकारी वनस्पति उद्यान", short: "वनस्पति उद्यान" }
+        }
+      },
+      murugan_temple: {
+        lat: 11.4096, lng: 76.6868, min: 8, km: 1.4,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Elk+Hill+Murugan+Temple+Ooty",
+        i18n: {
+          en: { title: "Elk Hill Murugan Temple", short: "Murugan Temple" },
+          ta: { title: "எல்க் ஹில் முருகன் கோயில்", short: "முருகன் கோயில்" },
+          hi: { title: "एल्क हिल मुरुगन मंदिर", short: "मुरुगन मंदिर" }
+        }
+      },
+      govt_museum: {
+        lat: 11.4171, lng: 76.7101, min: 4, km: 0.7,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Government+Museum+Ooty",
+        i18n: {
+          en: { title: "Government Museum Ooty", short: "Govt Museum" },
+          ta: { title: "அரசு அருங்காட்சியகம், ஊட்டி", short: "அரசு அருங்காட்சியகம்" },
+          hi: { title: "सरकारी संग्रहालय, ऊटी", short: "सरकारी संग्रहालय" }
+        }
+      },
+      doddabetta: {
+        lat: 11.4, lng: 76.7357, min: 35, km: 9.5,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Doddabetta+Peak",
+        i18n: {
+          en: { title: "Doddabetta Peak Observatory", short: "Doddabetta Peak" },
+          ta: { title: "தொட்டபெட்டா சிகரம் காட்சி முனை", short: "தொட்டபெட்டா சிகரம்" },
+          hi: { title: "दोदाबेट्टा शिखर वेधशाला", short: "दोदाबेट्टा शिखर" }
+        }
+      },
+      pine_forest: {
+        lat: 11.4361, lng: 76.6752, min: 35, km: 10,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Pine+Forest+Ooty",
+        i18n: {
+          en: { title: "Pine Forest (Shooting Spot)", short: "Pine Forest" },
+          ta: { title: "பைன் காடு (படப்பிடிப்பு இடம்)", short: "பைன் காடு" },
+          hi: { title: "पाइन वन (शूटिंग स्थल)", short: "पाइन वन" }
+        }
+      },
+      avalanche: {
+        lat: 11.2761, lng: 76.5583, min: 75, km: 25,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Avalanche+Lake+Ooty",
+        i18n: {
+          en: { title: "Avalanche Lake Checkpoint", short: "Avalanche Lake" },
+          ta: { title: "அவலாஞ்சி ஏரி சோதனைச் சாவடி", short: "அவலாஞ்சி ஏரி" },
+          hi: { title: "अवलांच झील चौकी", short: "अवलांच झील" }
+        }
+      },
+      mudumalai: {
+        lat: 11.5675, lng: 76.533, min: 80, km: 37,
+        video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        maps: "https://www.google.com/maps/dir/?api=1&destination=Mudumalai+National+Park",
+        i18n: {
+          en: { title: "Mudumalai Tiger Reserve", short: "Mudumalai Park" },
+          ta: { title: "முதுமலை புலிகள் காப்பகம்", short: "முதுமலை பூங்கா" },
+          hi: { title: "मुदुमलई बाघ अभयारण्य", short: "मुदुमलई उद्यान" }
+        }
+      }
+    };
+
+    // Interface wording per language (draft translations for Tamil and Hindi: please have them checked)
+    const UI = {
+      en: {
+        scanPoint: 'Point camera at the Ooty card', scanLocked: 'Target locked \u2014 tap a landmark',
+        directions: 'Directions', close: 'Close', play: 'Play video', pause: 'Pause',
+        driveTime: 'Drive time', fromYou: 'From you', straight: 'straight line',
+        min: 'min', hr: 'hr', km: 'km', boot: 'Calibrating AR interface\u2026', captions: 'Captions'
+      },
+      ta: {
+        scanPoint: 'ஊட்டி அட்டையை கேமராவில் காட்டுங்கள்', scanLocked: 'அட்டை கிடைத்தது \u2014 ஓர் இடத்தைத் தொடவும்',
+        directions: 'வழிகள்', close: 'மூடு', play: 'காணொளியை இயக்கு', pause: 'இடைநிறுத்து',
+        driveTime: 'பயண நேரம்', fromYou: 'உங்கள் இடத்திலிருந்து', straight: 'நேர்கோட்டில்',
+        min: 'நிமிடம்', hr: 'மணி', km: 'கி.மீ', boot: 'AR திரையைத் தயார் செய்கிறது\u2026', captions: 'வசனங்கள்'
+      },
+      hi: {
+        scanPoint: 'कैमरे को ऊटी कार्ड की ओर करें', scanLocked: 'कार्ड मिल गया \u2014 किसी स्थान पर टैप करें',
+        directions: 'दिशा-निर्देश', close: 'बंद करें', play: 'वीडियो चलाएँ', pause: 'रोकें',
+        driveTime: 'ड्राइव का समय', fromYou: 'आपके स्थान से', straight: 'सीधी रेखा में',
+        min: 'मिनट', hr: 'घंटा', km: 'किमी', boot: 'AR इंटरफ़ेस तैयार हो रहा है\u2026', captions: 'उपशीर्षक'
+      }
+    };
+
+    // ---- Custom cyan line-icon set for the AR hotspot badges ----
+    const ICON_PATHS = {
+      wave:   '<path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><path d="M2 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
+      drop:   '<path d="M12 3c4 5 6 8.2 6 11.2A6 6 0 1 1 6 14.2C6 11.2 8 8 12 3z"/>',
+      leaf:   '<path d="M4 20c8 0 14-6 14-14 0 0-2 1-5 1C7 7 4 12 4 20z"/><path d="M4 20c0-6 3-9 8-11"/>',
+      temple: '<path d="M12 3l3.2 4H8.8L12 3z"/><path d="M7.5 8h9v3h-9z"/><path d="M6 12h12v7H6z"/><path d="M10 19v-4h4v4"/>',
+      museum: '<path d="M12 3l7.5 4.2H4.5L12 3z"/><path d="M5 9v8M9 9v8M15 9v8M19 9v8"/><path d="M4 19h16"/>',
+      peak:   '<path d="M3 18.5l5.8-9.6 3.4 5 2.6-3.4 6.2 8h-18z"/>',
+      pine:   '<path d="M12 3l3.6 5.4h-2L17 13h-2.6l3.1 5H6.5l3.1-5H7l3.4-4.6h-2L12 3z"/><path d="M11 18h2v3h-2z"/>',
+      paw:    '<circle cx="8" cy="10.5" r="1.7"/><circle cx="16" cy="10.5" r="1.7"/><circle cx="6" cy="6.5" r="1.2"/><circle cx="18" cy="6.5" r="1.2"/><path d="M12 21c-3 0-5.2-1.6-5.2-4.1 0-2.1 2.1-3.7 5.2-3.7s5.2 1.6 5.2 3.7C17.2 19.4 15 21 12 21z"/>'
+    };
+
+    function iconDataUri(pathId) {
+      const inner = ICON_PATHS[pathId] || ICON_PATHS.leaf;
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0a1420" stroke-width="1.7" ' +
+                  'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+      return 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+
+    // Give every hotspot a slim cyan edge + a corner emblem carrying its category icon
+    function dressUpHotspots() {
+      document.querySelectorAll('.spot-btn').forEach(el => {
+        const w = parseFloat(el.getAttribute('width'));
+        const h = parseFloat(el.getAttribute('height'));
+        const pos = el.getAttribute('position');
+        const iconKey = el.getAttribute('data-icon') || 'leaf';
+
+        // Thin cyan edge sitting just behind the plate
+        const frame = document.createElement('a-plane');
+        frame.setAttribute('width', (w + 0.01).toFixed(3));
+        frame.setAttribute('height', (h + 0.01).toFixed(3));
+        frame.setAttribute('color', '#33e6ff');
+        frame.setAttribute('material', 'opacity: 0.9');
+        frame.setAttribute('position', `${pos.x} ${pos.y} ${pos.z - 0.004}`);
+        el.parentNode.insertBefore(frame, el);
+
+        // Corner emblem: cyan ring + navy disc + icon glyph
+        const cx = -w / 2 + 0.026;
+        const cy = h / 2 - 0.024;
+
+        const ring = document.createElement('a-ring');
+        ring.setAttribute('radius-inner', '0.018');
+        ring.setAttribute('radius-outer', '0.0215');
+        ring.setAttribute('color', '#33e6ff');
+        ring.setAttribute('position', `${cx} ${cy} 0.002`);
+        el.appendChild(ring);
+
+        const disc = document.createElement('a-circle');
+        disc.setAttribute('radius', '0.018');
+        disc.setAttribute('color', '#a9f6ff');
+        disc.setAttribute('position', `${cx} ${cy} 0.0025`);
+        el.appendChild(disc);
+
+        const icon = document.createElement('a-image');
+        icon.setAttribute('width', '0.026');
+        icon.setAttribute('height', '0.026');
+        icon.setAttribute('position', `${cx} ${cy} 0.003`);
+        icon.setAttribute('transparent', 'true');
+        icon.setAttribute('src', iconDataUri(iconKey));
+        el.appendChild(icon);
+      });
+    }
+
+    const videoEl = document.getElementById('arVideo');
+    const screenGroup = document.getElementById('videoScreenGroup');
+    const lblTitle = document.getElementById('lblTitle');
+    const lblPlay = document.getElementById('lblPlay');
+    const lblClose = document.getElementById('lblClose');
+    const lblDistance = document.getElementById('lblDistance');
+    const lblDirections = document.getElementById('lblDirections');
+    const playPauseBtn = document.getElementById('arPlayPauseBtn');
+    const arDirectionsBtn = document.getElementById('arDirectionsBtn');
+    const bottomBar = document.getElementById('active-info-bar');
+    const infoTitle = document.getElementById('info-title');
+    const infoTime = document.getElementById('info-time');
+    const mapsLink = document.getElementById('mapsLink');
+    const mapsLabel = document.getElementById('mapsLabel');
+    const dockCloseBtn = document.querySelector('.btn-close');
+    const bootLoader = document.getElementById('boot-loader');
+    const bootText = document.getElementById('bootText');
+    const captionBar = document.getElementById('caption-bar');
+    const ccBtn = document.getElementById('cc-btn');
+    const langButtons = Array.prototype.slice.call(document.querySelectorAll('#lang-toggle button[data-lang]'));
+
+    const sceneEl = document.querySelector('a-scene');
+
+    // ---- Reduced motion: drop idle animations, and make tap-response animations instant ----
+    const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    function MS(ms) { return reduceMotion ? 1 : ms; }
+    function stripIdleMotion() {
+      if (!reduceMotion) return;
+      document.querySelectorAll('[animation__pulse], [animation__idle]').forEach(el => {
+        el.removeAttribute('animation__pulse');
+        el.removeAttribute('animation__idle');
+      });
+    }
+    stripIdleMotion();
+
+    // ---- App state ----
+    function detectLang() {
+      try {
+        const saved = localStorage.getItem('ooty-lang');
+        if (saved && UI[saved]) return saved;
+      } catch (e) { /* storage unavailable: fall through */ }
+      const n = String(navigator.language || 'en').toLowerCase();
+      if (n.indexOf('ta') === 0) return 'ta';
+      if (n.indexOf('hi') === 0) return 'hi';
+      return 'en';
+    }
+
+    let LANG = detectLang();
+    let currentId = null;                 // landmark that is open, or null
+    let distState = { kind: 'fixed' };    // fixed value, live route, or straight-line fallback
+    let playUI = false;                   // whether the AR button currently shows "Pause"
+    let tracking = false;                 // whether the card is currently tracked
+    let currentMapsUrl = '';              // Maps URL for the open landmark (used by the AR Directions button)
+
+    // Build the icon badges once the scene's entities exist
+    if (sceneEl.hasLoaded) {
+      dressUpHotspots();
+    } else {
+      sceneEl.addEventListener('loaded', dressUpHotspots);
+    }
+    sceneEl.addEventListener('loaded', stripIdleMotion);
+
+    // Hide the boot loader once the AR scene has rendered its first frame
+    sceneEl.addEventListener('renderstart', () => {
+      bootLoader.classList.add('hidden');
+    });
+    setTimeout(() => bootLoader.classList.add('hidden'), 4000);
+
+    // Little scale "pop" used for tap feedback on any clickable a-plane
+    function popFeedback(el) {
+      el.removeAttribute('animation__pop');
+      el.setAttribute('animation__pop', {
+        property: 'scale',
+        from: '0.85 0.85 0.85',
+        to: '1 1 1',
+        dur: MS(220),
+        easing: 'easeOutBack'
+      });
+    }
+
+    // ================= AR TEXT: drawn on a canvas, shown on an <a-image> =================
+    // a-text cannot shape Tamil or Devanagari, so every AR label is drawn by the browser (which can)
+    // and used as a picture. Text is centred, shrunk to fit its plate, and can carry a small icon.
+    const TEX_PPU = 2000;   // canvas pixels per world unit
+
+    function fontFor(kind) {
+      if (LANG === 'ta') return "'Noto Sans Tamil', sans-serif";
+      if (LANG === 'hi') return "'Noto Sans Devanagari', sans-serif";
+      return kind === 'head' ? "'Orbitron', sans-serif" : "'Rajdhani', sans-serif";
+    }
+
+    function loadFont(family, weight, text) {
+      if (!document.fonts || !document.fonts.load) return Promise.resolve();
+      return document.fonts.load(weight + ' 40px ' + family, text).catch(() => {});
+    }
+
+    function drawIcon(ctx, name, x, cy, s, color) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      if (name === 'play') {
+        ctx.beginPath();
+        ctx.moveTo(x + s * 0.12, cy - s * 0.5);
+        ctx.lineTo(x + s * 0.12, cy + s * 0.5);
+        ctx.lineTo(x + s * 0.95, cy);
+        ctx.closePath();
+        ctx.fill();
+      } else if (name === 'pause') {
+        ctx.fillRect(x + s * 0.12, cy - s * 0.5, s * 0.28, s);
+        ctx.fillRect(x + s * 0.58, cy - s * 0.5, s * 0.28, s);
+      } else if (name === 'close') {
+        ctx.lineWidth = s * 0.18;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x + s * 0.15, cy - s * 0.4); ctx.lineTo(x + s * 0.85, cy + s * 0.4);
+        ctx.moveTo(x + s * 0.85, cy - s * 0.4); ctx.lineTo(x + s * 0.15, cy + s * 0.4);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // o: { text, kind: 'head'|'body', color, icon, size (fraction of line height), pad (world units per side), upper }
+    async function renderLabel(el, o) {
+      if (!el) return;
+      const rid = (el._rid = (el._rid || 0) + 1);      // if a newer render starts, this one is dropped
+      const W = parseFloat(el.getAttribute('width'));
+      const H = parseFloat(el.getAttribute('height'));
+      const cw = Math.max(8, Math.round(W * TEX_PPU));
+      const ch = Math.max(8, Math.round(H * TEX_PPU));
+
+      let text = String(o.text);
+      if (o.upper && LANG === 'en') text = text.toUpperCase();
+      const lines = text.split('\n');
+      const family = fontFor(o.kind);
+      const weight = o.kind === 'head' ? 600 : 700;
+
+      await loadFont(family, weight, text);
+      if (rid !== el._rid) return;
+
+      const cv = document.createElement('canvas');
+      cv.width = cw;
+      cv.height = ch;
+      const ctx = cv.getContext('2d');
+      const slot = ch / lines.length;
+      const maxW = cw - 2 * (o.pad == null ? 0.02 : o.pad) * TEX_PPU;
+
+      const measure = p => {
+        ctx.font = weight + ' ' + p + 'px ' + family;
+        const tw = Math.max.apply(null, lines.map(l => ctx.measureText(l).width));
+        const iw = o.icon ? p * 0.8 : 0;
+        const gap = o.icon ? p * 0.4 : 0;
+        return { tw: tw, iw: iw, gap: gap, total: tw + iw + gap };
+      };
+
+      let px = slot * (o.size || 0.6);
+      let m = measure(px);
+      while (m.total > maxW && px > 10) { px *= 0.94; m = measure(px); }
+
+      ctx.font = weight + ' ' + px + 'px ' + family;
+      ctx.fillStyle = o.color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const x0 = (cw - m.total) / 2;
+      if (o.icon) drawIcon(ctx, o.icon, x0, ch / 2, m.iw, o.color);
+      const tx = x0 + m.iw + m.gap + m.tw / 2;
+      lines.forEach((l, i) => ctx.fillText(l, tx, slot * (i + 0.5) + px * 0.04));
+
+      el.setAttribute('src', cv.toDataURL('image/png'));
+      el.setAttribute('visible', 'true');
+    }
+
+    // ================= LANGUAGE HELPERS =================
+    function ui(key) { return (UI[LANG] || UI.en)[key]; }
+    function pt(p, key) { return (p.i18n[LANG] || p.i18n.en)[key]; }
+
+    function fmtDuration(min) {
+      if (min < 60) return min + ' ' + ui('min');
+      const h = Math.floor(min / 60), m = min % 60;
+      return h + ' ' + ui('hr') + (m ? ' ' + m + ' ' + ui('min') : '');
+    }
+
+    function fmtKm(km) {
+      return (km < 10 ? km.toFixed(1) : String(Math.round(km))) + ' ' + ui('km');
+    }
+
+    function distanceText() {
+      const p = PLACES[currentId];
+      if (!p) return '';
+      if (distState.kind === 'live') return ui('fromYou') + ' \u00B7 ' + fmtDuration(distState.min) + ' (' + fmtKm(distState.km) + ')';
+      if (distState.kind === 'line') return ui('fromYou') + ' \u00B7 ~' + fmtKm(distState.km) + ' ' + ui('straight');
+      return ui('driveTime') + ' \u00B7 ' + fmtDuration(p.min) + ' (' + fmtKm(p.km) + ')';
+    }
+
+    // ================= RENDER: hotspots, panel, dock =================
+    function renderHotspotLabels() {
+      document.querySelectorAll('.spot-btn').forEach(btn => {
+        const p = PLACES[btn.getAttribute('data-id')];
+        const lbl = btn.querySelector('.hs-label');
+        if (!p || !lbl) return;
+        renderLabel(lbl, {
+          text: pt(p, 'short') + '\n(' + fmtDuration(p.min) + ')',
+          kind: 'body', color: '#a9f6ff', size: 0.68, pad: 0.05
+        });
+      });
+    }
+
+    function renderPlayLabel() {
+      renderLabel(lblPlay, playUI
+        ? { text: ui('pause'), kind: 'body', color: '#eaf6ff', icon: 'pause', size: 0.6, upper: true, pad: 0.03 }
+        : { text: ui('play'),  kind: 'body', color: '#030507', icon: 'play',  size: 0.6, upper: true, pad: 0.03 });
+    }
+
+    function renderPanelStatic() {
+      renderLabel(lblClose,      { text: ui('close'),      kind: 'body', color: '#030507', icon: 'close', size: 0.6,  upper: true, pad: 0.03 });
+      renderLabel(lblDirections, { text: ui('directions'), kind: 'body', color: '#030507', size: 0.62, upper: true, pad: 0.03 });
+      renderPlayLabel();
+    }
+
+    function renderDistance() {
+      const d = distanceText();
+      renderLabel(lblDistance, { text: d, kind: 'body', color: '#33e6ff', size: 0.62, pad: 0.03 });
+      infoTime.innerText = d;
+    }
+
+    function renderPlace() {
+      const p = PLACES[currentId];
+      if (!p) return;
+      const title = pt(p, 'title');
+      renderLabel(lblTitle, { text: title, kind: 'head', color: '#a9f6ff', size: 0.5, pad: 0.03 });
+      infoTitle.innerText = title;
+      renderDistance();
+    }
+
+    function setPlayUI(playing) {
+      playUI = playing;
+      playPauseBtn.setAttribute('color', playing ? '#8c6bff' : '#33e6ff');
+      renderPlayLabel();
+    }
+
+    function updateScanText() {
+      scanPromptText.innerText = tracking ? ui('scanLocked') : ui('scanPoint');
+    }
+
+    // ---- Live distance from the user's current location ----
+    let liveRequestId = 0;
+    let userPos = null;
+    let userPosTime = 0;
+    const POS_MAX_AGE = 60000; // reuse a location fix for 60 s
+
+    function getUserPosition() {
+      if (userPos && Date.now() - userPosTime < POS_MAX_AGE) return Promise.resolve(userPos);
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          p => {
+            userPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            userPosTime = Date.now();
+            resolve(userPos);
+          },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      });
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+      const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    async function fetchRoute(from, to) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+                    from.lng + ',' + from.lat + ';' + to.lng + ',' + to.lat + '?overview=false';
+        const res = await fetch(url, { signal: ctrl.signal });
+        const j = await res.json();
+        if (!j.routes || !j.routes.length) throw new Error('no route');
+        return { km: j.routes[0].distance / 1000, min: Math.round(j.routes[0].duration / 60) };
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    // Shows the fixed value first (set in the click handler), then swaps in the live one
+    async function updateLiveDistance(id) {
+      const data = PLACES[id];
+      if (!data || data.lat == null) return;
+      const reqId = ++liveRequestId;
+
+      const from = await getUserPosition();
+      if (!from || reqId !== liveRequestId) return; // denied, failed, or user moved on
+
+      const to = { lat: data.lat, lng: data.lng };
+      let next;
+      try {
+        const r = await fetchRoute(from, to);
+        next = { kind: 'live', min: r.min, km: r.km };
+      } catch (e) {
+        next = { kind: 'line', km: haversineKm(from, to) };
+      }
+      if (reqId !== liveRequestId) return;
+      distState = next;
+      renderDistance();
+    }
+
+    // ================= CAPTIONS =================
+    // The video is drawn onto a 3D plane, so the browser can't show its captions. We read the caption
+    // track ourselves and show the current line in an HTML bar above the dock.
+    let captionsOn = true;
+    let captionTrackEl = null;
+
+    function hideCaption() {
+      captionBar.classList.remove('show');
+    }
+
+    function showCue(track) {
+      if (!captionsOn || !track) { hideCaption(); return; }
+      const cues = track.activeCues ? Array.prototype.slice.call(track.activeCues) : [];
+      const text = cues.map(c => String(c.text).replace(/<[^>]*>/g, '')).join('\n').trim();
+      captionBar.textContent = text;
+      captionBar.classList.toggle('show', !!text);
+    }
+
+    function clearCaptions() {
+      if (captionTrackEl) { captionTrackEl.remove(); captionTrackEl = null; }
+      captionBar.textContent = '';
+      hideCaption();
+      ccBtn.hidden = true;
+    }
+
+    function loadCaptions(data) {
+      clearCaptions();
+      const caps = data && data.captions;
+      if (!caps) return;
+      const lang = caps[LANG] ? LANG : 'en';
+      if (!caps[lang]) return;
+      const t = document.createElement('track');
+      t.kind = 'captions';
+      t.srclang = lang;
+      t.label = lang;
+      t.src = caps[lang];
+      videoEl.appendChild(t);
+      t.track.mode = 'hidden';                 // we draw the text ourselves
+      t.track.addEventListener('cuechange', () => showCue(t.track));
+      captionTrackEl = t;
+      ccBtn.hidden = false;
+    }
+
+    ccBtn.addEventListener('click', () => {
+      captionsOn = !captionsOn;
+      ccBtn.setAttribute('aria-pressed', String(captionsOn));
+      if (captionTrackEl) showCue(captionTrackEl.track); else hideCaption();
+    });
+
+    // ================= LANGUAGE SWITCH =================
+    function setLanguage(lang) {
+      if (!UI[lang]) lang = 'en';
+      LANG = lang;
+      try { localStorage.setItem('ooty-lang', lang); } catch (e) { /* ignore */ }
+      document.documentElement.lang = lang;
+      langButtons.forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang)));
+
+      bootText.textContent = ui('boot');
+      mapsLabel.textContent = ui('directions');
+      dockCloseBtn.setAttribute('aria-label', ui('close'));
+      ccBtn.setAttribute('aria-label', ui('captions'));
+      updateScanText();
+
+      renderHotspotLabels();
+      renderPanelStatic();
+      if (currentId) {
+        renderPlace();
+        loadCaptions(PLACES[currentId]);
+      }
+    }
+
+    langButtons.forEach(b => {
+      b.addEventListener('click', () => setLanguage(b.getAttribute('data-lang')));
+    });
+
+    // Attach click listeners to landmark buttons
+    document.querySelectorAll('.spot-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const data = PLACES[id];
+        if (!data) return;
+
+        popFeedback(btn);
+
+        currentId = id;
+        distState = { kind: 'fixed' };
+
+        videoEl.pause();
+        videoEl.src = data.video;
+        videoEl.load();
+        loadCaptions(data);
+
+        setPlayUI(false);
+        renderPlace();
+        screenGroup.setAttribute('visible', 'true');
+        screenGroup.removeAttribute('animation__show');
+        screenGroup.setAttribute('animation__show', {
+          property: 'scale',
+          from: '0.05 0.05 0.05',
+          to: '1 1 1',
+          dur: MS(420),
+          easing: 'easeOutElastic'
+        });
+
+        currentMapsUrl = data.maps;
+
+        mapsLink.href = data.maps;
+        bottomBar.classList.add('active');
+        document.body.classList.add('spot-open');
+
+        updateLiveDistance(id);
+      });
+    });
+
+    // AR Play / Pause Toggle Button Handler
+    playPauseBtn.addEventListener('click', () => {
+      popFeedback(playPauseBtn);
+      if (videoEl.paused) {
+        videoEl.muted = false;
+        videoEl.play().then(() => {
+          setPlayUI(true);
+        }).catch(err => {
+          videoEl.muted = true;
+          videoEl.play();
+          setPlayUI(true);
+        });
+      } else {
+        videoEl.pause();
+        setPlayUI(false);
+      }
+    });
+
+    // AR Directions Button Handler — opens Google Maps for the open landmark
+    arDirectionsBtn.addEventListener('click', () => {
+      popFeedback(arDirectionsBtn);
+      if (currentMapsUrl) window.open(currentMapsUrl, '_blank');
+    });
+
+    // Close button — animate the billboard shrinking away before hiding it
+    function closeActiveSpot() {
+      liveRequestId++;
+      videoEl.pause();
+
+      screenGroup.removeAttribute('animation__hide');
+      screenGroup.setAttribute('animation__hide', {
+        property: 'scale',
+        to: '0.01 0.01 0.01',
+        dur: MS(220),
+        easing: 'easeInBack'
+      });
+      setTimeout(() => screenGroup.setAttribute('visible', 'false'), MS(220));
+
+      bottomBar.classList.remove('active');
+      document.body.classList.remove('spot-open');
+      setPlayUI(false);
+      clearCaptions();
+      currentId = null;
+    }
+
+    document.getElementById('arCloseBtn').addEventListener('click', () => {
+      popFeedback(document.getElementById('arCloseBtn'));
+      closeActiveSpot();
+    });
+
+    // Target tracking events
+    const cardTarget = document.getElementById('cardTarget');
+    const scanPrompt = document.getElementById('scanPrompt');
+    const scanPromptText = document.getElementById('scanPromptText');
+
+    cardTarget.addEventListener("targetFound", () => {
+      tracking = true;
+      updateScanText();
+      scanPrompt.classList.remove('locked');
+      void scanPrompt.offsetWidth;
+      scanPrompt.classList.add('locked');
+    });
+
+    cardTarget.addEventListener("targetLost", () => {
+      tracking = false;
+      updateScanText();
+      scanPrompt.classList.remove('locked');
+      videoEl.pause();
+      setPlayUI(false);
+      hideCaption();
+    });
+
+    // Start in the guest's language (saved choice, else browser language, else English)
+    setLanguage(LANG);
+  </script>
+</body>
+</html>
